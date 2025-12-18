@@ -11,10 +11,13 @@ use crate::security::KeyProvider;
 use crate::shared::verify_integrity;
 use crate::types::IntegrityError;
 
+// -------------------------------------------------------------------------------------------------
+// ----- Constants  --------------------------------------------------------------------------------
+
 static KEY_CACHE: OnceLock<Mutex<HashMap<PathBuf, String>>> = OnceLock::new();
 
 // -------------------------------------------------------------------------------------------------
-// ---- Types --------------------------------------------------------------------------------------
+// ----- Types -------------------------------------------------------------------------------------
 
 pub struct DbManager {
     db_path: PathBuf,
@@ -112,6 +115,7 @@ impl DbManager {
     }
 
     pub fn connect(&self) -> Result<Connection> {
+        log::debug!("Connecting to database at {:?}", self.db_path);
         let conn = Connection::open(&self.db_path)?;
 
         // Try to access the database as plaintext first
@@ -119,8 +123,11 @@ impl DbManager {
             .query_row("SELECT count(*) FROM sqlite_master", [], |_| Ok(()))
             .is_ok()
         {
+            log::debug!("Database opened as plaintext");
             return Ok(conn);
         }
+
+        log::debug!("Plaintext access failed, attempting to unlock with key");
 
         // If plaintext access fails, it might be encrypted. Try with key.
         let key_opt = self
@@ -130,6 +137,7 @@ impl DbManager {
         let key = match key_opt {
             Some(k) => k,
             None => {
+                log::debug!("No key found, cannot open encrypted database");
                 return Err(rusqlite::Error::SqliteFailure(
                     rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_NOTADB),
                     Some("Failed to open database. Encrypted and no key found.".to_string()),
@@ -141,12 +149,14 @@ impl DbManager {
 
         // Verify key works
         if let Err(_) = conn.query_row("SELECT count(*) FROM sqlite_master", [], |_| Ok(())) {
+            log::debug!("Key failed to unlock database");
             return Err(rusqlite::Error::SqliteFailure(
                 rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_NOTADB),
                 Some("Failed to open database. Invalid key or corrupted file.".to_string()),
             ));
         }
 
+        log::debug!("Database unlocked successfully");
         Ok(conn)
     }
 
@@ -639,9 +649,11 @@ impl DbManager {
 
     pub fn lock(&self) -> Result<()> {
         if self.is_locked()? {
+            log::debug!("Database is already locked");
             return Ok(());
         }
 
+        log::debug!("Starting database encryption (lock)");
         let conn = self.connect()?;
 
         // Check if already encrypted (we know it's encrypted if PRAGMA key was needed,
@@ -677,14 +689,17 @@ impl DbManager {
         fs::rename(&new_path, &self.db_path)
             .map_err(|e| rusqlite::Error::UserFunctionError(Box::new(e)))?;
 
+        log::debug!("Database encryption completed");
         Ok(())
     }
 
     pub fn unlock(&self) -> Result<()> {
         if !self.is_locked()? {
+            log::debug!("Database is already unlocked");
             return Ok(());
         }
 
+        log::debug!("Starting database decryption (unlock)");
         let conn = self.connect()?;
 
         // We assume conn is valid. If it was encrypted, key is set. If plaintext, no key.
@@ -712,6 +727,7 @@ impl DbManager {
         fs::rename(&new_path, &self.db_path)
             .map_err(|e| rusqlite::Error::UserFunctionError(Box::new(e)))?;
 
+        log::debug!("Database decryption completed");
         Ok(())
     }
 }

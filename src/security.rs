@@ -1,4 +1,5 @@
 use keyring::Entry;
+use log::debug;
 use rand::RngCore;
 use std::io;
 use std::sync::OnceLock;
@@ -24,6 +25,7 @@ impl KeychainProvider {
     }
 
     fn generate_key() -> String {
+        debug!("Generating new encryption key");
         let mut key = [0u8; 32];
         rand::thread_rng().fill_bytes(&mut key);
         hex::encode(key)
@@ -38,21 +40,26 @@ impl KeychainProvider {
 impl KeyProvider for KeychainProvider {
     fn get_key(&self) -> io::Result<String> {
         if let Some(key) = self.cached_key.get() {
+            debug!("Encryption key retrieved from memory cache");
             return Ok(key.clone());
         }
 
+        debug!("Requesting keychain access for encryption key");
         let entry = self.entry()?;
 
         match entry.get_password() {
             Ok(key) => {
+                debug!("Encryption key retrieved from keychain");
                 let _ = self.cached_key.set(key.clone());
                 Ok(key)
             }
             Err(keyring::Error::NoEntry) => {
+                debug!("No encryption key found in keychain, creating new one");
                 let new_key = Self::generate_key();
                 entry.set_password(&new_key).map_err(|e| {
                     io::Error::new(io::ErrorKind::Other, format!("Failed to save key: {}", e))
                 })?;
+                debug!("New encryption key saved to keychain");
                 let _ = self.cached_key.set(new_key.clone());
                 Ok(new_key)
             }
@@ -65,17 +72,23 @@ impl KeyProvider for KeychainProvider {
 
     fn read_key(&self) -> io::Result<Option<String>> {
         if let Some(key) = self.cached_key.get() {
+            debug!("Encryption key retrieved from memory cache");
             return Ok(Some(key.clone()));
         }
 
+        debug!("Requesting keychain access for encryption key (read-only)");
         let entry = self.entry()?;
 
         match entry.get_password() {
             Ok(key) => {
+                debug!("Encryption key retrieved from keychain");
                 let _ = self.cached_key.set(key.clone());
                 Ok(Some(key))
             }
-            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(keyring::Error::NoEntry) => {
+                debug!("No encryption key found in keychain");
+                Ok(None)
+            }
             Err(e) => Err(io::Error::new(
                 io::ErrorKind::Other,
                 format!("Failed to retrieve key: {}", e),
