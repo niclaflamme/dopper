@@ -8,7 +8,8 @@ use std::sync::{Mutex, OnceLock};
 use uuid::Uuid;
 
 use crate::security::KeyProvider;
-use crate::shared::verify_integrity::{self, IntegrityError};
+use crate::shared::verify_integrity;
+use crate::types::IntegrityError;
 
 static KEY_CACHE: OnceLock<Mutex<HashMap<PathBuf, String>>> = OnceLock::new();
 

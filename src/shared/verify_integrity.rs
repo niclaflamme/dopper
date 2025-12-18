@@ -3,20 +3,9 @@ use rusqlite::Connection;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use thiserror::Error;
 use uuid::Uuid;
 
-#[derive(Error, Debug)]
-pub enum IntegrityError {
-    #[error("Database is corrupted. MD5 mismatch for migration {0}.")]
-    Corruption(String),
-    #[error("Missing migration file: {0}")]
-    MissingFile(String),
-    #[error("Database error: {0}")]
-    DbError(#[from] rusqlite::Error),
-    #[error("IO error: {0}")]
-    IoError(#[from] std::io::Error),
-}
+use crate::types::IntegrityError;
 
 /// Verifies the integrity of applied migrations against the file system.
 /// Returns the map of all available migration files (name -> md5) if successful.
