@@ -478,3 +478,29 @@ fn test_integrity_restores_default_envs() {
         "Prod should have been restored"
     );
 }
+
+#[test]
+fn test_dotenv_retrieval() {
+    let (manager, _dir, _db_path) = setup();
+    let project = manager
+        .create_project("dotenv_test")
+        .expect("failed to create");
+
+    let env = manager
+        .get_or_create_environment(&project.id, "dev")
+        .unwrap();
+
+    manager
+        .set_secret(&env.id, "TEST_KEY", "TEST_VALUE")
+        .expect("failed to set");
+    manager
+        .set_secret(&env.id, "ANOTHER_KEY", "12345")
+        .expect("failed to set");
+
+    let secrets = manager.get_secrets(&env.id).expect("failed to get secrets");
+    
+    // We can't guarantee order from DB usually, so we check existence
+    assert!(secrets.iter().any(|s| s.key == "TEST_KEY" && s.value == "TEST_VALUE"));
+    assert!(secrets.iter().any(|s| s.key == "ANOTHER_KEY" && s.value == "12345"));
+    assert_eq!(secrets.len(), 2);
+}

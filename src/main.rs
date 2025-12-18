@@ -70,6 +70,11 @@ enum Commands {
     },
     /// Decrypts the database (stores in plaintext)
     Unlock {},
+    /// Prints the environment variables in .env format
+    Dotenv {
+        #[arg(long, short)]
+        env: Option<String>,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -214,6 +219,9 @@ async fn main() -> anyhow::Result<()> {
         },
         Commands::Unlock {} => {
             commands::unlock(&db_manager);
+        }
+        Commands::Dotenv { env } => {
+            commands::print_dot_env(&db_manager, env.clone());
         }
     }
 
