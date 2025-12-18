@@ -3,7 +3,7 @@ use crate::shared::{
     ask_for_confirmation, get_effective_env, get_env_slug, get_project_from_current_dir,
 };
 
-pub fn print_dot_env(db_manager: &DbManager, env: Option<String>) {
+pub fn print(db_manager: &DbManager, env: Option<String>) {
     if let Some(project) = get_project_from_current_dir(db_manager) {
         let env_slug = get_env_slug(db_manager, &env, &project.id);
 

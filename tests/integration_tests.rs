@@ -481,10 +481,10 @@ fn test_integrity_restores_default_envs() {
 }
 
 #[test]
-fn test_dotenv_retrieval() {
+fn test_print_retrieval() {
     let (manager, _dir, _db_path) = setup();
     let project = manager
-        .create_project("dotenv_test")
+        .create_project("print_test")
         .expect("failed to create");
 
     let env = manager

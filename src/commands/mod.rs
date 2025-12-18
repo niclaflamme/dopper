@@ -55,5 +55,5 @@ pub use get_lock_status::get_lock_status;
 mod unlock;
 pub use unlock::unlock;
 
-mod print_dot_env;
-pub use print_dot_env::print_dot_env;
+mod print;
+pub use print::print;
