@@ -1,4 +1,4 @@
-use crate::db::DbManager;
+use crate::shared::db_manager::DbManager;
 
 pub fn list_projects(db_manager: &DbManager) {
     match db_manager.list_projects() {

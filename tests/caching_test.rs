@@ -1,5 +1,5 @@
-use dopper::db::DbManager;
-use dopper::security::KeyProvider;
+use dopper::shared::db_manager::DbManager;
+use dopper::shared::keychain::KeyProvider;
 use std::io;
 use std::sync::{Arc, Mutex};
 use tempfile::tempdir;

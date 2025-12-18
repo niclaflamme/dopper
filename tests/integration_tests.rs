@@ -1,5 +1,5 @@
-use dopper::db::DbManager;
-use dopper::security::MockKeyProvider;
+use dopper::shared::db_manager::DbManager;
+use dopper::shared::keychain::MockKeyProvider;
 use dopper::shared::get_effective_env;
 use rusqlite::Connection;
 use std::fs;

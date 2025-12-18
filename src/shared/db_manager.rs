@@ -1,13 +1,14 @@
-use path_clean::PathClean;
-use rusqlite::{Connection, Result};
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
+
+use path_clean::PathClean;
+use rusqlite::{Connection, Result};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::security::KeyProvider;
+use crate::shared::keychain::KeyProvider;
 use crate::shared::verify_integrity;
 use crate::types::IntegrityError;
 

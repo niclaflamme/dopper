@@ -1,4 +1,4 @@
-use crate::db::DbManager;
+use crate::shared::db_manager::DbManager;
 use crate::shared::get_project_from_current_dir;
 
 pub fn unset_secret(db_manager: &DbManager, key: &str, env: &str) {

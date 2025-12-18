@@ -1,4 +1,4 @@
-use crate::db::DbManager;
+use crate::shared::db_manager::DbManager;
 
 pub fn create_project(db_manager: &DbManager, name: &str) {
     match db_manager.create_project(name) {

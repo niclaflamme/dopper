@@ -1,4 +1,4 @@
-use crate::db::DbManager;
+use crate::shared::db_manager::DbManager;
 
 pub fn get_env_slug(db_manager: &DbManager, env: &Option<String>, project_id: &str) -> String {
     if let Some(env_str) = env {

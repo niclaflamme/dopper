@@ -1,7 +1,7 @@
-use crate::db::{self, DbManager};
+use crate::shared::db_manager::{self, DbManager};
 use std::env;
 
-pub fn get_project_from_current_dir(db_manager: &DbManager) -> Option<db::Project> {
+pub fn get_project_from_current_dir(db_manager: &DbManager) -> Option<db_manager::Project> {
     let current_dir = env::current_dir().expect("Could not get current directory");
     match db_manager.get_project_from_path(&current_dir) {
         Ok(Some(project)) => Some(project),

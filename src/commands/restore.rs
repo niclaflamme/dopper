@@ -1,11 +1,11 @@
 use std::fs;
 
-use crate::db::{self, DbManager};
+use crate::shared::db_manager::{self, DbManager};
 use crate::shared::ask_for_confirmation;
 
 pub fn restore(db_manager: &DbManager, file: String) {
     let content = fs::read_to_string(&file).expect("Failed to read dump file");
-    let dump: db::DopperDump = serde_json::from_str(&content).expect("Failed to parse dump file");
+    let dump: db_manager::DopperDump = serde_json::from_str(&content).expect("Failed to parse dump file");
 
     if ask_for_confirmation(&format!(
         "This will OVERWRITE your current database with the content of '{}'. Are you sure?",

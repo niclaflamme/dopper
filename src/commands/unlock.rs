@@ -1,4 +1,4 @@
-use crate::db::DbManager;
+use crate::shared::db_manager::DbManager;
 use crate::shared::is_macos;
 
 pub fn unlock(db_manager: &DbManager) {

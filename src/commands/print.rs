@@ -1,4 +1,4 @@
-use crate::db::DbManager;
+use crate::shared::db_manager::DbManager;
 use crate::shared::{
     ask_for_confirmation, get_effective_env, get_env_slug, get_project_from_current_dir,
 };

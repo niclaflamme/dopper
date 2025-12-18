@@ -1,6 +1,6 @@
 use std::io::{self, Write};
 
-use crate::db::DbManager;
+use crate::shared::db_manager::DbManager;
 use crate::shared::is_macos;
 
 pub fn init(db_manager: &DbManager) {

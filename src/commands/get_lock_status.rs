@@ -1,4 +1,4 @@
-use crate::db::DbManager;
+use crate::shared::db_manager::DbManager;
 
 pub fn get_lock_status(db_manager: &DbManager) {
     match db_manager.is_locked() {

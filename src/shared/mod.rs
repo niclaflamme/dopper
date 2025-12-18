@@ -20,3 +20,6 @@ mod get_effective_env;
 pub use get_effective_env::get_effective_env;
 
 pub mod verify_integrity;
+
+pub mod db_manager;
+pub mod keychain;

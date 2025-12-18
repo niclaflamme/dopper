@@ -1,4 +1,4 @@
-use crate::db::{DbManager, Project};
+use crate::shared::db_manager::{DbManager, Project};
 use anyhow::{anyhow, Result};
 
 pub fn get_effective_env(

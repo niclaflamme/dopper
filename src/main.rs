@@ -3,8 +3,8 @@ use directories::UserDirs;
 use std::fs;
 
 use dopper::commands;
-use dopper::db::DbManager;
-use dopper::security::KeychainProvider;
+use dopper::shared::db_manager::DbManager;
+use dopper::shared::keychain::KeychainProvider;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Dopper: Environment variable manager with zero footprint", long_about = None)]

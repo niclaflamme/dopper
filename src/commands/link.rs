@@ -1,7 +1,7 @@
 use std::env;
 use std::io::{self, Write};
 
-use crate::db::DbManager;
+use crate::shared::db_manager::DbManager;
 
 pub fn link(db_manager: &DbManager, project_name: Option<String>) {
     let projects = match db_manager.list_projects() {
