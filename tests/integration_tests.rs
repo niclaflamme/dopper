@@ -1,5 +1,6 @@
 use dopper::db::DbManager;
 use dopper::security::MockKeyProvider;
+use dopper::shared::get_effective_env;
 use rusqlite::Connection;
 use std::fs;
 use tempfile::tempdir;
@@ -503,4 +504,25 @@ fn test_dotenv_retrieval() {
     assert!(secrets.iter().any(|s| s.key == "TEST_KEY" && s.value == "TEST_VALUE"));
     assert!(secrets.iter().any(|s| s.key == "ANOTHER_KEY" && s.value == "12345"));
     assert_eq!(secrets.len(), 2);
+}
+
+#[test]
+fn test_get_effective_env_injection() {
+    let (manager, _dir, _db_path) = setup();
+    let project = manager
+        .create_project("effective_env_test")
+        .expect("failed to create");
+    let env_slug = "dev";
+
+    // We don't set any secrets, just check for system ones
+    manager.get_or_create_environment(&project.id, env_slug).unwrap();
+
+    let env_vars = get_effective_env(&manager, &project, env_slug).expect("failed to get effective env");
+
+    assert!(env_vars
+        .iter()
+        .any(|(k, v)| k == "DOPPER_PROJECT_ID" && v == &project.id));
+    assert!(env_vars
+        .iter()
+        .any(|(k, v)| k == "DOPPER_ENV" && v == env_slug));
 }

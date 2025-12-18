@@ -16,4 +16,7 @@ pub use load_config::load_config;
 mod get_dump_path;
 pub use get_dump_path::get_dump_path;
 
+mod get_effective_env;
+pub use get_effective_env::get_effective_env;
+
 pub mod verify_integrity;
