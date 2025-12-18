@@ -66,7 +66,7 @@ impl IntegrityChecker {
                 "INSERT INTO environments (env_id, project_id, slug) VALUES (?, ?, ?)",
                 &[&env_id, project_id, slug],
             )?;
-            println!("Integrity: Restored missing '{}' environment for project '{}'", slug, project_id);
+            log::debug!("Integrity: Restored missing '{}' environment for project '{}'", slug, project_id);
         }
         Ok(())
     }

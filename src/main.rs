@@ -154,7 +154,7 @@ impl Dopper {
         self.db_manager
             .initialize_db()
             .expect("Database initialization failed");
-        println!("Dopper initialized successfully.");
+        log::debug!("Dopper initialized successfully.");
 
         if os::is_macos() {
             println!("\nWould you like to encrypt your database? (Recommended)");
@@ -492,6 +492,19 @@ impl Dopper {
             eprintln!("Locking (encryption) is currently only supported on macOS.");
             return;
         }
+
+        match self.db_manager.is_locked() {
+            Ok(true) => {
+                println!("Database is already locked.");
+                return;
+            }
+            Err(e) => {
+                eprintln!("Error checking lock status: {}", e);
+                return;
+            }
+            Ok(false) => {}
+        }
+
         match self.db_manager.lock() {
             Ok(_) => println!("Database locked (encrypted) successfully."),
             Err(e) => eprintln!("Error locking database: {}", e),
@@ -516,6 +529,19 @@ impl Dopper {
             eprintln!("Unlocking is currently only supported on macOS.");
             return;
         }
+
+        match self.db_manager.is_locked() {
+            Ok(false) => {
+                println!("Database is already unlocked.");
+                return;
+            }
+            Err(e) => {
+                eprintln!("Error checking lock status: {}", e);
+                return;
+            }
+            Ok(true) => {}
+        }
+
         match self.db_manager.unlock() {
             Ok(_) => println!("Database unlocked (decrypted) successfully."),
             Err(e) => eprintln!("Error unlocking database: {}", e),
@@ -548,6 +574,7 @@ impl Dopper {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    env_logger::init();
     let cli = Cli::parse();
 
     let base_dir = UserDirs::new()

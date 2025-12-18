@@ -335,6 +335,28 @@ fn test_lock_status() {
 }
 
 #[test]
+fn test_lock_idempotency() {
+    let (manager, _dir, _db_path) = setup();
+
+    // Unlock an already unlocked DB
+    assert!(!manager.is_locked().unwrap());
+    manager.unlock().expect("Unlocking an unlocked DB should not fail");
+    assert!(!manager.is_locked().unwrap());
+
+    // Lock DB
+    manager.lock().expect("Locking should work");
+    assert!(manager.is_locked().unwrap());
+
+    // Lock an already locked DB
+    manager.lock().expect("Locking a locked DB should not fail");
+    assert!(manager.is_locked().unwrap());
+
+    // Unlock DB
+    manager.unlock().expect("Unlocking should work");
+    assert!(!manager.is_locked().unwrap());
+}
+
+#[test]
 fn test_integrity_restores_default_envs() {
     let (manager, _dir, db_path) = setup();
     let project = manager.create_project("integrity_test").expect("failed to create");

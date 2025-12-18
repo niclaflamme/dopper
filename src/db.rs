@@ -170,7 +170,7 @@ impl DbManager {
                 conn.execute_batch(&sql).expect("Could not apply migration");
                 self.add_migration_record(&conn, name, &file_md5)
                     .expect("Could not add migration record");
-                println!("Applied migration: {}", name);
+                log::debug!("Applied migration: {}", name);
             }
         }
 
@@ -604,6 +604,10 @@ impl DbManager {
     }
 
     pub fn lock(&self) -> Result<()> {
+        if self.is_locked()? {
+            return Ok(());
+        }
+
         let conn = self.connect()?;
         
         // Check if already encrypted (we know it's encrypted if PRAGMA key was needed, 
@@ -637,6 +641,10 @@ impl DbManager {
     }
 
     pub fn unlock(&self) -> Result<()> {
+        if !self.is_locked()? {
+            return Ok(());
+        }
+
         let conn = self.connect()?;
         
         // We assume conn is valid. If it was encrypted, key is set. If plaintext, no key.
