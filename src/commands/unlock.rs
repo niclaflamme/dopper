@@ -1,8 +1,8 @@
 use crate::db::DbManager;
-use crate::os;
+use crate::shared::is_macos;
 
 pub fn unlock(db_manager: &DbManager) {
-    if !os::is_macos() {
+    if !is_macos() {
         eprintln!("Unlocking is currently only supported on macOS.");
         return;
     }

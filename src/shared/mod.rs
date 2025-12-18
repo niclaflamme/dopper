@@ -6,3 +6,6 @@ pub use get_project_from_current_dir::get_project_from_current_dir;
 
 mod get_env_slug;
 pub use get_env_slug::get_env_slug;
+
+mod is_macos;
+pub use is_macos::is_macos;
