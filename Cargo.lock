@@ -565,6 +565,8 @@ dependencies = [
  "path-clean",
  "rand",
  "rusqlite",
+ "security-framework",
+ "security-framework-sys",
  "serde",
  "serde_json",
  "tempfile",

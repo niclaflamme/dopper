@@ -75,16 +75,21 @@ impl DbManager {
         self.db_path.exists()
     }
 
+    fn key_cache_id(&self) -> PathBuf {
+        self.db_path.clean()
+    }
+
     fn get_key_cached(&self) -> std::io::Result<String> {
         let cache_mutex = KEY_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
         let mut cache = cache_mutex.lock().unwrap();
-        
-        if let Some(key) = cache.get(&self.db_path) {
+
+        let cache_id = self.key_cache_id();
+        if let Some(key) = cache.get(&cache_id) {
             return Ok(key.clone());
         }
 
         let key = self.key_provider.get_key()?;
-        cache.insert(self.db_path.clone(), key.clone());
+        cache.insert(cache_id, key.clone());
         Ok(key)
     }
 
@@ -92,12 +97,13 @@ impl DbManager {
         let cache_mutex = KEY_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
         let mut cache = cache_mutex.lock().unwrap();
 
-        if let Some(key) = cache.get(&self.db_path) {
+        let cache_id = self.key_cache_id();
+        if let Some(key) = cache.get(&cache_id) {
             return Ok(Some(key.clone()));
         }
 
         if let Some(key) = self.key_provider.read_key()? {
-            cache.insert(self.db_path.clone(), key.clone());
+            cache.insert(cache_id, key.clone());
             Ok(Some(key))
         } else {
             Ok(None)
