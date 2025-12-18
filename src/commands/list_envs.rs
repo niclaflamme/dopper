@@ -10,10 +10,20 @@ pub fn list_envs(db_manager: &DbManager) {
                 if environments.is_empty() {
                     println!("No environments found for project '{}'.", project.name);
                 } else {
+                    let active_env = db_manager
+                        .get_active_environment(&project.id)
+                        .unwrap_or_else(|_| "dev".to_string());
+
                     let mut table = Table::new();
-                    table.set_header(vec!["ID", "Project ID", "Slug"]);
+                    table.set_header(vec!["Active", "ID", "Project ID", "Slug"]);
                     for env in environments {
-                        table.add_row(Row::from(vec![env.id, env.project_id, env.slug]));
+                        let is_active = if env.slug == active_env { "✔" } else { "" };
+                        table.add_row(Row::from(vec![
+                            is_active.to_string(),
+                            env.id,
+                            env.project_id,
+                            env.slug,
+                        ]));
                     }
                     println!("{table}");
                 }
