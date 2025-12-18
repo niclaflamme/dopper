@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.82"
 clap = { version = "4.5.4", features = ["derive"] }
+comfy-table = "7.2.1"
 directories = "5.0.1"
 md5 = "0.7.0"
 path-clean = "1.0.1"

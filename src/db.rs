@@ -1,13 +1,11 @@
-// src/db.rs
-
-use rusqlite::{Connection, Result};
-use std::path::{Path, PathBuf};
-use std::fs;
 use md5;
-use thiserror::Error;
-use std::collections::HashMap;
-use uuid::Uuid;
 use path_clean::PathClean;
+use rusqlite::{Connection, Result};
+use std::collections::HashMap;
+use std::fs;
+use std::path::{Path, PathBuf};
+use thiserror::Error;
+use uuid::Uuid;
 
 #[derive(Error, Debug)]
 pub enum MigrationError {
@@ -53,19 +51,28 @@ impl DbManager {
 
     pub fn initialize_db(&self) -> Result<()> {
         if let Err(e) = self.run_migrations() {
-            eprintln!("Migration integrity error: {}. Deleting database and starting over.", e);
+            eprintln!(
+                "Migration integrity error: {}. Deleting database and starting over.",
+                e
+            );
             fs::remove_file(&self.db_path).expect("Failed to delete corrupted database");
-            self.run_migrations().expect("Failed to initialize database after reset");
+            self.run_migrations()
+                .expect("Failed to initialize database after reset");
         }
         Ok(())
     }
 
     fn run_migrations(&self) -> Result<(), MigrationError> {
         let conn = self.connect().expect("Could not connect to database");
-        self.create_migrations_table(&conn).expect("Could not create migrations table");
+        self.create_migrations_table(&conn)
+            .expect("Could not create migrations table");
 
-        let applied_migrations = self.get_applied_migrations(&conn).expect("Could not get applied migrations");
-        let migration_files = self.get_migration_files().expect("Could not get migration files");
+        let applied_migrations = self
+            .get_applied_migrations(&conn)
+            .expect("Could not get applied migrations");
+        let migration_files = self
+            .get_migration_files()
+            .expect("Could not get migration files");
 
         // Check for corruption and missing files
         for (name, applied_md5) in &applied_migrations {
@@ -84,7 +91,8 @@ impl DbManager {
                 let path = Path::new("./src/migrations").join(name);
                 let sql = fs::read_to_string(&path).expect("Could not read migration file");
                 conn.execute_batch(&sql).expect("Could not apply migration");
-                self.add_migration_record(&conn, name, &file_md5).expect("Could not add migration record");
+                self.add_migration_record(&conn, name, &file_md5)
+                    .expect("Could not add migration record");
                 println!("Applied migration: {}", name);
             }
         }
@@ -134,10 +142,13 @@ impl DbManager {
     }
 
     fn add_migration_record(&self, conn: &Connection, name: &str, md5: &str) -> Result<()> {
-        conn.execute("INSERT INTO migrations (name, md5) VALUES (?, ?)", [name, md5])?;
+        conn.execute(
+            "INSERT INTO migrations (name, md5) VALUES (?, ?)",
+            [name, md5],
+        )?;
         Ok(())
     }
-    
+
     pub fn create_project(&self, name: &str) -> Result<Project> {
         let conn = self.connect()?;
         let project_id = Uuid::new_v4().to_string();
@@ -166,7 +177,8 @@ impl DbManager {
 
     pub fn get_project_by_id(&self, project_id: &str) -> Result<Project> {
         let conn = self.connect()?;
-        let mut stmt = conn.prepare("SELECT project_id, name, created_at FROM projects WHERE project_id = ?")?;
+        let mut stmt =
+            conn.prepare("SELECT project_id, name, created_at FROM projects WHERE project_id = ?")?;
         stmt.query_row(&[project_id], |row| {
             Ok(Project {
                 id: row.get(0)?,
@@ -178,7 +190,8 @@ impl DbManager {
 
     pub fn get_project_by_name(&self, name: &str) -> Result<Project> {
         let conn = self.connect()?;
-        let mut stmt = conn.prepare("SELECT project_id, name, created_at FROM projects WHERE name = ?")?;
+        let mut stmt =
+            conn.prepare("SELECT project_id, name, created_at FROM projects WHERE name = ?")?;
         stmt.query_row(&[name], |row| {
             Ok(Project {
                 id: row.get(0)?,
@@ -187,10 +200,12 @@ impl DbManager {
             })
         })
     }
-    
+
     pub fn link_directory(&self, project_id: &str, path: &Path) -> Result<()> {
         let conn = self.connect()?;
-        let path_str = path.to_str().ok_or(rusqlite::Error::InvalidPath(path.to_path_buf()))?;
+        let path_str = path
+            .to_str()
+            .ok_or(rusqlite::Error::InvalidPath(path.to_path_buf()))?;
         conn.execute(
             "INSERT OR REPLACE INTO directory_links (path, project_id) VALUES (?, ?)",
             &[path_str, project_id],
@@ -203,9 +218,11 @@ impl DbManager {
         let mut current_path = PathBuf::from(path).clean();
 
         loop {
-            let path_str = current_path.to_str().ok_or(rusqlite::Error::InvalidPath(current_path.clone()))?;
+            let path_str = current_path
+                .to_str()
+                .ok_or(rusqlite::Error::InvalidPath(current_path.clone()))?;
             let mut stmt = conn.prepare("SELECT p.project_id, p.name, p.created_at FROM projects p JOIN directory_links dl ON p.project_id = dl.project_id WHERE dl.path = ?")?;
-            
+
             match stmt.query_row(&[path_str], |row| {
                 Ok(Project {
                     id: row.get(0)?,
@@ -242,7 +259,9 @@ impl DbManager {
 
     pub fn get_environment(&self, project_id: &str, slug: &str) -> Result<Environment> {
         let conn = self.connect()?;
-        let mut stmt = conn.prepare("SELECT env_id, project_id, slug FROM environments WHERE project_id = ? AND slug = ?")?;
+        let mut stmt = conn.prepare(
+            "SELECT env_id, project_id, slug FROM environments WHERE project_id = ? AND slug = ?",
+        )?;
         stmt.query_row(&[project_id, slug], |row| {
             Ok(Environment {
                 id: row.get(0)?,
@@ -254,7 +273,8 @@ impl DbManager {
 
     fn get_environment_by_id(&self, env_id: &str) -> Result<Environment> {
         let conn = self.connect()?;
-        let mut stmt = conn.prepare("SELECT env_id, project_id, slug FROM environments WHERE env_id = ?")?;
+        let mut stmt =
+            conn.prepare("SELECT env_id, project_id, slug FROM environments WHERE env_id = ?")?;
         stmt.query_row(&[env_id], |row| {
             Ok(Environment {
                 id: row.get(0)?,
@@ -308,17 +328,23 @@ impl DbManager {
 
     pub fn get_active_environment(&self, project_id: &str) -> Result<String> {
         let conn = self.connect()?;
-        let mut stmt = conn.prepare("SELECT active_slug FROM active_states WHERE project_id = ?")?;
+        let mut stmt =
+            conn.prepare("SELECT active_slug FROM active_states WHERE project_id = ?")?;
         stmt.query_row(&[project_id], |row| row.get(0))
     }
 
-    pub fn list_environments(&self, project_id: &str) -> Result<Vec<String>> {
+    pub fn list_environments(&self, project_id: &str) -> Result<Vec<Environment>> {
         let conn = self.connect()?;
-        let mut stmt = conn.prepare("SELECT slug FROM environments WHERE project_id = ?")?;
+        let mut stmt =
+            conn.prepare("SELECT env_id, project_id, slug FROM environments WHERE project_id = ?")?;
         let mut rows = stmt.query(&[project_id])?;
         let mut environments = Vec::new();
         while let Some(row) = rows.next()? {
-            environments.push(row.get(0)?);
+            environments.push(Environment {
+                id: row.get(0)?,
+                project_id: row.get(1)?,
+                slug: row.get(2)?,
+            });
         }
         Ok(environments)
     }

@@ -1,8 +1,9 @@
 use clap::{Parser, Subcommand};
+use comfy_table::{Row, Table};
 use directories::UserDirs;
+use std::env;
 use std::fs;
 use std::path::PathBuf;
-use std::env;
 use std::process::Command;
 
 mod db;
@@ -42,7 +43,7 @@ enum Commands {
         /// The command to execute
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         command: Vec<String>,
-        
+
         #[arg(long, short)]
         env: Option<String>,
     },
@@ -104,13 +105,18 @@ impl Dopper {
     }
 
     fn init(&self) {
-        self.db_manager.initialize_db().expect("Database initialization failed");
+        self.db_manager
+            .initialize_db()
+            .expect("Database initialization failed");
         println!("Dopper initialized successfully.");
     }
 
     fn create_project(&self, name: &str) {
         match self.db_manager.create_project(name) {
-            Ok(project) => println!("Project '{}' created successfully with id '{}'", project.name, project.id),
+            Ok(project) => println!(
+                "Project '{}' created successfully with id '{}'",
+                project.name, project.id
+            ),
             Err(e) => eprintln!("Error creating project: {}", e),
         }
     }
@@ -123,7 +129,10 @@ impl Dopper {
                 } else {
                     println!("Projects:");
                     for project in projects {
-                        println!("- {} (id: {}, created: {})", project.name, project.id, project.created_at);
+                        println!(
+                            "- {} (id: {}, created: {})",
+                            project.name, project.id, project.created_at
+                        );
                     }
                 }
             }
@@ -135,14 +144,20 @@ impl Dopper {
         let project = match self.db_manager.get_project_by_name(project_name) {
             Ok(p) => p,
             Err(_) => {
-                eprintln!("Project '{}' not found. Please create it first.", project_name);
+                eprintln!(
+                    "Project '{}' not found. Please create it first.",
+                    project_name
+                );
                 return;
             }
         };
 
         let current_dir = env::current_dir().expect("Could not get current directory");
         match self.db_manager.link_directory(&project.id, &current_dir) {
-            Ok(_) => println!("Successfully linked directory {:?} to project '{}'.", current_dir, project.name),
+            Ok(_) => println!(
+                "Successfully linked directory {:?} to project '{}'.",
+                current_dir, project.name
+            ),
             Err(e) => eprintln!("Error linking directory: {}", e),
         }
     }
@@ -165,12 +180,13 @@ impl Dopper {
     fn set_secret(&self, key: &str, value: &str, env: &str) {
         if let Some(project) = self.get_project_from_current_dir() {
             match self.db_manager.get_or_create_environment(&project.id, env) {
-                Ok(environment) => {
-                    match self.db_manager.set_secret(&environment.id, key, value) {
-                        Ok(_) => println!("Secret '{}' set for project '{}' in environment '{}'.", key, project.name, env),
-                        Err(e) => eprintln!("Error setting secret: {}", e),
-                    }
-                }
+                Ok(environment) => match self.db_manager.set_secret(&environment.id, key, value) {
+                    Ok(_) => println!(
+                        "Secret '{}' set for project '{}' in environment '{}'.",
+                        key, project.name, env
+                    ),
+                    Err(e) => eprintln!("Error setting secret: {}", e),
+                },
                 Err(e) => eprintln!("Error getting or creating environment: {}", e),
             }
         }
@@ -179,12 +195,13 @@ impl Dopper {
     fn unset_secret(&self, key: &str, env: &str) {
         if let Some(project) = self.get_project_from_current_dir() {
             match self.db_manager.get_environment(&project.id, env) {
-                Ok(environment) => {
-                    match self.db_manager.unset_secret(&environment.id, key) {
-                        Ok(_) => println!("Secret '{}' unset for project '{}' in environment '{}'.", key, project.name, env),
-                        Err(e) => eprintln!("Error unsetting secret: {}", e),
-                    }
-                }
+                Ok(environment) => match self.db_manager.unset_secret(&environment.id, key) {
+                    Ok(_) => println!(
+                        "Secret '{}' unset for project '{}' in environment '{}'.",
+                        key, project.name, env
+                    ),
+                    Err(e) => eprintln!("Error unsetting secret: {}", e),
+                },
                 Err(e) => eprintln!("Error getting environment: {}", e),
             }
         }
@@ -194,21 +211,25 @@ impl Dopper {
         if let Some(project) = self.get_project_from_current_dir() {
             let env_slug = self.get_env_slug(env, &project.id);
             match self.db_manager.get_environment(&project.id, &env_slug) {
-                Ok(environment) => {
-                    match self.db_manager.get_secrets(&environment.id) {
-                        Ok(secrets) => {
-                            if secrets.is_empty() {
-                                println!("No secrets found for project '{}' in environment '{}'.", project.name, env_slug);
-                            } else {
-                                println!("Secrets for project '{}' in environment '{}':", project.name, env_slug);
-                                for secret in secrets {
-                                    println!("{}: {}", secret.key, secret.value);
-                                }
+                Ok(environment) => match self.db_manager.get_secrets(&environment.id) {
+                    Ok(secrets) => {
+                        if secrets.is_empty() {
+                            println!(
+                                "No secrets found for project '{}' in environment '{}'.",
+                                project.name, env_slug
+                            );
+                        } else {
+                            println!(
+                                "Secrets for project '{}' in environment '{}':",
+                                project.name, env_slug
+                            );
+                            for secret in secrets {
+                                println!("{}: {}", secret.key, secret.value);
                             }
                         }
-                        Err(e) => eprintln!("Error listing secrets: {}", e),
                     }
-                }
+                    Err(e) => eprintln!("Error listing secrets: {}", e),
+                },
                 Err(e) => eprintln!("Error getting environment: {}", e),
             }
         }
@@ -218,26 +239,27 @@ impl Dopper {
         if let Some(project) = self.get_project_from_current_dir() {
             let env_slug = self.get_env_slug(env, &project.id);
             match self.db_manager.get_environment(&project.id, &env_slug) {
-                Ok(environment) => {
-                    match self.db_manager.get_secrets(&environment.id) {
-                        Ok(secrets) => {
-                            let mut cmd = Command::new(&command[0]);
-                            cmd.args(&command[1..]);
-                            for secret in secrets {
-                                cmd.env(secret.key, secret.value);
-                            }
-                            
-                            let mut child = cmd.spawn().expect("Failed to execute command");
-                            let status = child.wait().expect("Command wasn't running");
-                            if !status.success() {
-                                eprintln!("Command exited with non-zero status: {}", status);
-                            }
+                Ok(environment) => match self.db_manager.get_secrets(&environment.id) {
+                    Ok(secrets) => {
+                        let mut cmd = Command::new(&command[0]);
+                        cmd.args(&command[1..]);
+                        for secret in secrets {
+                            cmd.env(secret.key, secret.value);
                         }
-                        Err(e) => eprintln!("Error getting secrets: {}", e),
+
+                        let mut child = cmd.spawn().expect("Failed to execute command");
+                        let status = child.wait().expect("Command wasn't running");
+                        if !status.success() {
+                            eprintln!("Command exited with non-zero status: {}", status);
+                        }
                     }
-                }
+                    Err(e) => eprintln!("Error getting secrets: {}", e),
+                },
                 Err(rusqlite::Error::QueryReturnedNoRows) => {
-                    eprintln!("No secrets found for project '{}' in environment '{}'.", project.name, env_slug);
+                    eprintln!(
+                        "No secrets found for project '{}' in environment '{}'.",
+                        project.name, env_slug
+                    );
                 }
                 Err(e) => eprintln!("Error getting environment: {}", e),
             }
@@ -248,14 +270,19 @@ impl Dopper {
         if let Some(env_str) = env {
             env_str.clone()
         } else {
-            self.db_manager.get_active_environment(project_id).unwrap_or_else(|_| "dev".to_string())
+            self.db_manager
+                .get_active_environment(project_id)
+                .unwrap_or_else(|_| "dev".to_string())
         }
     }
 
     fn set_active_environment(&self, slug: &str) {
         if let Some(project) = self.get_project_from_current_dir() {
             match self.db_manager.set_active_environment(&project.id, slug) {
-                Ok(_) => println!("Active environment for project '{}' set to '{}'.", project.name, slug),
+                Ok(_) => println!(
+                    "Active environment for project '{}' set to '{}'.",
+                    project.name, slug
+                ),
                 Err(e) => eprintln!("Error setting active environment: {}", e),
             }
         }
@@ -268,10 +295,12 @@ impl Dopper {
                     if environments.is_empty() {
                         println!("No environments found for project '{}'.", project.name);
                     } else {
-                        println!("Environments for project '{}':", project.name);
+                        let mut table = Table::new();
+                        table.set_header(vec!["ID", "Project ID", "Slug"]);
                         for env in environments {
-                            println!("- {}", env);
+                            table.add_row(Row::from(vec![env.id, env.project_id, env.slug]));
                         }
+                        println!("{table}");
                     }
                 }
                 Err(e) => eprintln!("Error listing environments: {}", e),
