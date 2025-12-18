@@ -15,13 +15,11 @@ pub fn list_envs(db_manager: &DbManager) {
                         .unwrap_or_else(|_| "dev".to_string());
 
                     let mut table = Table::new();
-                    table.set_header(vec!["Active", "ID", "Project ID", "Slug"]);
+                    table.set_header(vec!["Active", "Slug"]);
                     for env in environments {
                         let is_active = if env.slug == active_env { "✔" } else { "" };
                         table.add_row(Row::from(vec![
                             is_active.to_string(),
-                            env.id,
-                            env.project_id,
                             env.slug,
                         ]));
                     }
