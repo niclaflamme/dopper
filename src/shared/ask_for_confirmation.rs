@@ -1,6 +1,6 @@
 use std::io::{self, Write};
 
-pub fn confirm(message: &str) -> bool {
+pub fn ask_for_confirmation(message: &str) -> bool {
     print!("{} (y/N): ", message);
     io::stdout().flush().expect("Failed to flush stdout");
 

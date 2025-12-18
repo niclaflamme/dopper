@@ -1,6 +1,6 @@
 use std::env;
 use crate::db::DbManager;
-use crate::commands::project_list;
+use crate::commands;
 
 pub fn link(db_manager: &DbManager, project_name: Option<String>) {
     if let Some(name) = project_name {
@@ -25,6 +25,6 @@ pub fn link(db_manager: &DbManager, project_name: Option<String>) {
         }
     } else {
         println!("No project name provided. Please specify a project to link.");
-        project_list::list(db_manager);
+        commands::list_projects(db_manager);
     }
 }

@@ -1,7 +1,7 @@
 use crate::db::DbManager;
 use crate::shared::utils;
 
-pub fn list(db_manager: &DbManager, env: Option<String>) {
+pub fn list_secrets(db_manager: &DbManager, env: Option<String>) {
     if let Some(project) = utils::get_project_from_current_dir(db_manager) {
         let env_slug = utils::get_env_slug(db_manager, &env, &project.id);
         match db_manager.get_environment(&project.id, &env_slug) {

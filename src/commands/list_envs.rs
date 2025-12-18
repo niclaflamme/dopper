@@ -2,7 +2,7 @@ use comfy_table::{Row, Table};
 use crate::db::DbManager;
 use crate::shared::utils;
 
-pub fn list(db_manager: &DbManager) {
+pub fn list_envs(db_manager: &DbManager) {
     if let Some(project) = utils::get_project_from_current_dir(db_manager) {
         match db_manager.list_environments(&project.id) {
             Ok(environments) => {

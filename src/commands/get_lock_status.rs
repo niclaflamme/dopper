@@ -1,6 +1,6 @@
 use crate::db::DbManager;
 
-pub fn status(db_manager: &DbManager) {
+pub fn get_lock_status(db_manager: &DbManager) {
     match db_manager.is_locked() {
         Ok(locked) => {
             if locked {

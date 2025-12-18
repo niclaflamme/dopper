@@ -1,2 +1,3 @@
 pub mod utils;
-pub mod interactive;
+mod ask_for_confirmation;
+pub use ask_for_confirmation::ask_for_confirmation;

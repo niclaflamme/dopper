@@ -1,6 +1,6 @@
 use crate::db::DbManager;
 
-pub fn list(db_manager: &DbManager) {
+pub fn list_projects(db_manager: &DbManager) {
     match db_manager.list_projects() {
         Ok(projects) => {
             if projects.is_empty() {

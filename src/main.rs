@@ -151,69 +151,69 @@ async fn main() -> anyhow::Result<()> {
 
     match &cli.command {
         Commands::Link { project_name } => {
-            commands::link::link(&db_manager, project_name.clone());
+            commands::link(&db_manager, project_name.clone());
         }
         Commands::Project { command } => match command {
             ProjectCommands::Create { name } => {
-                commands::project_create::create(&db_manager, name);
+                commands::create_project(&db_manager, name);
             }
             ProjectCommands::List {} => {
-                commands::project_list::list(&db_manager);
+                commands::list_projects(&db_manager);
             }
             ProjectCommands::Delete { name } => {
-                commands::project_delete::delete(&db_manager, name);
+                commands::delete_project(&db_manager, name);
             }
         },
         Commands::Secrets { command } => match command {
             SecretsCommands::Set { key, value, env } => {
-                commands::secrets_set::set(&db_manager, key, value, env);
+                commands::set_secret(&db_manager, key, value, env);
             }
             SecretsCommands::Unset { key, env } => {
-                commands::secrets_unset::unset(&db_manager, key, env);
+                commands::unset_secret(&db_manager, key, env);
             }
             SecretsCommands::List { env } => {
-                commands::secrets_list::list(&db_manager, env.clone());
+                commands::list_secrets(&db_manager, env.clone());
             }
         },
         Commands::Env { command } => match command {
             EnvCommands::Use { slug } => {
-                commands::env_use::use_env(&db_manager, slug);
+                commands::use_env(&db_manager, slug);
             }
             EnvCommands::List {} => {
-                commands::env_list::list(&db_manager);
+                commands::list_envs(&db_manager);
             }
             EnvCommands::Create { slug } => {
-                commands::env_create::create(&db_manager, slug);
+                commands::create_env(&db_manager, slug);
             }
             EnvCommands::Delete { slug } => {
-                commands::env_delete::delete(&db_manager, slug);
+                commands::delete_env(&db_manager, slug);
             }
         },
         Commands::Run { command, env } => {
-            commands::run::run(&db_manager, command, env);
+            commands::run(&db_manager, command, env);
         }
         Commands::Init {} => {
-            commands::init::init(&db_manager);
+            commands::init(&db_manager);
         }
         Commands::Destroy {} => {
-            commands::destroy::destroy(&db_manager);
+            commands::destroy(&db_manager);
         }
         Commands::Dump { file, stdout } => {
-            commands::dump::dump(&db_manager, file.clone(), *stdout);
+            commands::dump(&db_manager, file.clone(), *stdout);
         }
         Commands::Restore { file } => {
-            commands::restore::restore(&db_manager, file.clone());
+            commands::restore(&db_manager, file.clone());
         }
         Commands::Lock { command } => match command {
             Some(LockCommands::Status {}) => {
-                commands::lock_status::status(&db_manager);
+                commands::get_lock_status(&db_manager);
             }
             None => {
-                commands::lock::lock(&db_manager);
+                commands::lock(&db_manager);
             }
         },
         Commands::Unlock {} => {
-            commands::unlock::unlock(&db_manager);
+            commands::unlock(&db_manager);
         }
     }
 
