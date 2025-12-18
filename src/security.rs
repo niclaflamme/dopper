@@ -34,33 +34,6 @@ impl KeychainProvider {
             io::Error::new(io::ErrorKind::Other, format!("Keyring init error: {}", e))
         })
     }
-
-    /// Checks if the keychain entry exists without attempting to read secret material.
-    ///
-    /// On macOS, this avoids triggering an auth prompt just to determine existence.
-    #[cfg(target_os = "macos")]
-    fn entry_exists(&self) -> io::Result<bool> {
-        use security_framework::item::{ItemClass, ItemSearchOptions};
-        use security_framework_sys::base::errSecItemNotFound;
-
-        let mut search = ItemSearchOptions::new();
-        search
-            .class(ItemClass::generic_password())
-            .service(&self.service)
-            .account(&self.user)
-            .load_attributes(true)
-            .load_data(false)
-            .limit(1);
-
-        match search.search() {
-            Ok(results) => Ok(!results.is_empty()),
-            Err(err) if err.code() == errSecItemNotFound => Ok(false),
-            Err(err) => Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("Keychain search error: {}", err),
-            )),
-        }
-    }
 }
 
 impl KeyProvider for KeychainProvider {
@@ -70,20 +43,6 @@ impl KeyProvider for KeychainProvider {
         }
 
         let entry = self.entry()?;
-
-        // On macOS, checking existence via an attributes-only search can avoid a first prompt
-        // when the key is missing (the create path is what actually needs auth).
-        #[cfg(target_os = "macos")]
-        {
-            if !self.entry_exists()? {
-                let new_key = Self::generate_key();
-                entry.set_password(&new_key).map_err(|e| {
-                    io::Error::new(io::ErrorKind::Other, format!("Failed to save key: {}", e))
-                })?;
-                let _ = self.cached_key.set(new_key.clone());
-                return Ok(new_key);
-            }
-        }
 
         match entry.get_password() {
             Ok(key) => {
