@@ -1,0 +1,20 @@
+use crate::db::DbManager;
+
+pub fn list(db_manager: &DbManager) {
+    match db_manager.list_projects() {
+        Ok(projects) => {
+            if projects.is_empty() {
+                println!("No projects found.");
+            } else {
+                println!("Projects:");
+                for project in projects {
+                    println!(
+                        "- {} (id: {}, created: {})",
+                        project.name, project.id, project.created_at
+                    );
+                }
+            }
+        }
+        Err(e) => eprintln!("Error listing projects: {}", e),
+    }
+}
