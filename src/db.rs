@@ -7,8 +7,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use uuid::Uuid;
 
-use crate::integrity::{IntegrityChecker, IntegrityError};
 use crate::security::KeyProvider;
+use crate::shared::verify_integrity::{self, IntegrityError};
 
 static KEY_CACHE: OnceLock<Mutex<HashMap<PathBuf, String>>> = OnceLock::new();
 
@@ -168,8 +168,8 @@ impl DbManager {
             .expect("Could not create migrations table");
 
         // Use the IntegrityChecker to verify DB state and get available migration files
-        let migration_files = IntegrityChecker::verify(&conn)?;
-        let applied_migrations = IntegrityChecker::get_applied_migrations(&conn)?;
+        let migration_files = verify_integrity::verify_integrity(&conn)?;
+        let applied_migrations = verify_integrity::get_applied_migrations(&conn)?;
 
         // Apply new migrations
         for (name, file_md5) in &migration_files {
@@ -184,7 +184,7 @@ impl DbManager {
         }
 
         // Ensure data integrity (default envs)
-        IntegrityChecker::ensure_default_environments(&conn)?;
+        verify_integrity::ensure_default_environments(&conn)?;
 
         Ok(())
     }

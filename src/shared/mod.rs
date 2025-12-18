@@ -15,3 +15,5 @@ pub use load_config::load_config;
 
 mod get_dump_path;
 pub use get_dump_path::get_dump_path;
+
+pub mod verify_integrity;
