@@ -10,8 +10,8 @@ pub struct Config {
 
 impl Config {
     pub fn load() -> Self {
-        let config_path = UserDirs::new()
-            .map(|dirs| dirs.home_dir().join(".dopper").join("settings.toml"));
+        let config_path =
+            UserDirs::new().map(|dirs| dirs.home_dir().join(".dopper").join("settings.toml"));
 
         if let Some(path) = config_path {
             if path.exists() {
@@ -22,7 +22,7 @@ impl Config {
                 }
             }
         }
-        
+
         Config { dump_path: None }
     }
 
@@ -30,9 +30,9 @@ impl Config {
         if let Some(path_str) = &self.dump_path {
             // fast and loose tilde expansion for config values
             if path_str.starts_with("~/") {
-                 if let Some(dirs) = UserDirs::new() {
-                     return dirs.home_dir().join(&path_str[2..]);
-                 }
+                if let Some(dirs) = UserDirs::new() {
+                    return dirs.home_dir().join(&path_str[2..]);
+                }
             }
             return PathBuf::from(path_str);
         }

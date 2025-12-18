@@ -1,11 +1,17 @@
 use std::io::{self, Write};
+
 use crate::db::DbManager;
 use crate::os;
 
 pub fn init(db_manager: &DbManager) {
     if db_manager.db_path_exists() {
-        println!("Dopper database already exists at {:?}.", db_manager.db_path());
-        println!("If you want to re-initialize, please delete the database first using `dopper destroy` or manually deleting the file.");
+        println!(
+            "Dopper database already exists at {:?}.",
+            db_manager.db_path()
+        );
+        println!(
+            "If you want to re-initialize, please delete the database first using `dopper destroy` or manually deleting the file."
+        );
         return;
     }
 

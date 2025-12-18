@@ -1,6 +1,7 @@
 use std::process::Command;
+
 use crate::db::DbManager;
-use crate::shared::{get_project_from_current_dir, get_env_slug};
+use crate::shared::{get_env_slug, get_project_from_current_dir};
 
 pub fn run(db_manager: &DbManager, command: &[String], env: &Option<String>) {
     if command.is_empty() {

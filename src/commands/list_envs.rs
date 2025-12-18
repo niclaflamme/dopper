@@ -1,4 +1,5 @@
 use comfy_table::{Row, Table};
+
 use crate::db::DbManager;
 use crate::shared::get_project_from_current_dir;
 

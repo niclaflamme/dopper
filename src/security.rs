@@ -30,9 +30,8 @@ impl KeychainProvider {
     }
 
     fn entry(&self) -> io::Result<Entry> {
-        Entry::new(&self.service, &self.user).map_err(|e| {
-            io::Error::new(io::ErrorKind::Other, format!("Keyring init error: {}", e))
-        })
+        Entry::new(&self.service, &self.user)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Keyring init error: {}", e)))
     }
 }
 

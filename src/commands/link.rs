@@ -1,16 +1,14 @@
 use std::env;
-use crate::db::DbManager;
+
 use crate::commands;
+use crate::db::DbManager;
 
 pub fn link(db_manager: &DbManager, project_name: Option<String>) {
     if let Some(name) = project_name {
         let project = match db_manager.get_project_by_name(&name) {
             Ok(p) => p,
             Err(_) => {
-                eprintln!(
-                    "Project '{}' not found. Please create it first.",
-                    name
-                );
+                eprintln!("Project '{}' not found. Please create it first.", name);
                 return;
             }
         };

@@ -37,13 +37,14 @@ impl IntegrityChecker {
                 return Err(IntegrityError::MissingFile(name.clone()));
             }
         }
-        
+
         Ok(migration_files)
     }
 
     pub fn ensure_default_environments(conn: &Connection) -> Result<(), IntegrityError> {
         let mut stmt = conn.prepare("SELECT project_id FROM projects")?;
-        let project_ids: Vec<String> = stmt.query_map([], |row| row.get(0))?
+        let project_ids: Vec<String> = stmt
+            .query_map([], |row| row.get(0))?
             .collect::<Result<Vec<_>, _>>()?;
 
         for pid in project_ids {
@@ -66,12 +67,18 @@ impl IntegrityChecker {
                 "INSERT INTO environments (env_id, project_id, slug) VALUES (?, ?, ?)",
                 &[&env_id, project_id, slug],
             )?;
-            log::debug!("Integrity: Restored missing '{}' environment for project '{}'", slug, project_id);
+            log::debug!(
+                "Integrity: Restored missing '{}' environment for project '{}'",
+                slug,
+                project_id
+            );
         }
         Ok(())
     }
 
-    pub fn get_applied_migrations(conn: &Connection) -> Result<HashMap<String, String>, rusqlite::Error> {
+    pub fn get_applied_migrations(
+        conn: &Connection,
+    ) -> Result<HashMap<String, String>, rusqlite::Error> {
         let mut stmt = conn.prepare("SELECT name, md5 FROM migrations")?;
         let mut rows = stmt.query([])?;
         let mut migrations = HashMap::new();
@@ -84,23 +91,23 @@ impl IntegrityChecker {
     fn get_migration_files() -> Result<HashMap<String, String>, std::io::Error> {
         let mut files = HashMap::new();
         let migrations_dir = Path::new("./src/migrations");
-        
+
         // Ensure directory exists (mostly for clean state in new checkouts)
         if !migrations_dir.exists() {
-             fs::create_dir_all(migrations_dir)?;
+            fs::create_dir_all(migrations_dir)?;
         }
-        
+
         for entry in fs::read_dir(migrations_dir)? {
             let entry = entry?;
             let path = entry.path();
             if path.is_file() {
                 // Ignore non-sql files if any? For now assume all files are migrations.
                 if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                     if name.ends_with(".sql") {
+                    if name.ends_with(".sql") {
                         let content = fs::read_to_string(&path)?;
                         let digest = md5::compute(content.as_bytes());
                         files.insert(name.to_string(), format!("{:x}", digest));
-                     }
+                    }
                 }
             }
         }

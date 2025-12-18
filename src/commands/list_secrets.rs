@@ -1,5 +1,5 @@
 use crate::db::DbManager;
-use crate::shared::{get_project_from_current_dir, get_env_slug};
+use crate::shared::{get_env_slug, get_project_from_current_dir};
 
 pub fn list_secrets(db_manager: &DbManager, env: Option<String>) {
     if let Some(project) = get_project_from_current_dir(db_manager) {

@@ -1,7 +1,8 @@
 use std::fs;
 use std::path::PathBuf;
-use crate::db::DbManager;
+
 use crate::config::Config;
+use crate::db::DbManager;
 
 pub fn dump(db_manager: &DbManager, file: Option<String>, stdout: bool) {
     match db_manager.dump() {
