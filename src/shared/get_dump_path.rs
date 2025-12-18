@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::types::Config;
 use directories::UserDirs;
 use std::path::PathBuf;
 
