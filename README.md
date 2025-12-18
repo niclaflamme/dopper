@@ -116,6 +116,8 @@ Manage key-value pairs for the active environment.
 
 - **Link Directory:** `dopper link <project_name>`
 - **Run Command:** `dopper run -- <command>`
+- **Print Secrets (.env format):** `dopper print [--env <slug>]` *(Prompts for confirmation; use `--yes` to skip)*
+- **Copy Secrets to Clipboard:** `dopper clip [--env <slug>]` *(No confirmation)*
 - **Destroy Database:** `dopper destroy` *(Warning: Irrevocable! Wipes all data)*
 
 ---

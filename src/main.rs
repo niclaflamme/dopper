@@ -1,6 +1,7 @@
+use std::fs;
+
 use clap::{Parser, Subcommand};
 use directories::UserDirs;
-use std::fs;
 
 use dopper::commands;
 use dopper::shared::db_manager::DbManager;
@@ -72,6 +73,15 @@ enum Commands {
     Unlock {},
     /// Prints the environment variables in .env format
     Print {
+        #[arg(long, short)]
+        env: Option<String>,
+
+        /// Skip confirmation prompt
+        #[arg(long, short = 'y')]
+        yes: bool,
+    },
+    /// Copies the environment variables in .env format to your clipboard
+    Clip {
         #[arg(long, short)]
         env: Option<String>,
     },
@@ -220,8 +230,11 @@ async fn main() -> anyhow::Result<()> {
         Commands::Unlock {} => {
             commands::unlock(&db_manager);
         }
-        Commands::Print { env } => {
-            commands::print(&db_manager, env.clone());
+        Commands::Print { env, yes } => {
+            commands::print(&db_manager, env.clone(), *yes);
+        }
+        Commands::Clip { env } => {
+            commands::clip(&db_manager, env.clone());
         }
     }
 

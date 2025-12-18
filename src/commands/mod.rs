@@ -57,3 +57,6 @@ pub use unlock::unlock;
 
 mod print;
 pub use print::print;
+
+mod clip;
+pub use clip::clip;
