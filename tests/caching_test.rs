@@ -24,6 +24,12 @@ impl KeyProvider for CountingKeyProvider {
         *count += 1;
         Ok(self.key.clone())
     }
+
+    fn read_key(&self) -> io::Result<Option<String>> {
+        let mut count = self.count.lock().unwrap();
+        *count += 1;
+        Ok(Some(self.key.clone()))
+    }
 }
 
 #[test]

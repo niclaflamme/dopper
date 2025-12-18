@@ -1,13 +1,16 @@
 use path_clean::PathClean;
 use rusqlite::{Connection, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{Mutex, OnceLock};
 use uuid::Uuid;
 
 use crate::integrity::{IntegrityChecker, IntegrityError};
 use crate::security::KeyProvider;
+
+static KEY_CACHE: OnceLock<Mutex<HashMap<PathBuf, String>>> = OnceLock::new();
 
 // -------------------------------------------------------------------------------------------------
 // ---- Types --------------------------------------------------------------------------------------
@@ -15,7 +18,6 @@ use crate::security::KeyProvider;
 pub struct DbManager {
     db_path: PathBuf,
     key_provider: Box<dyn KeyProvider + Send + Sync>,
-    cached_key: Arc<Mutex<Option<String>>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -62,8 +64,11 @@ impl DbManager {
         DbManager {
             db_path,
             key_provider,
-            cached_key: Arc::new(Mutex::new(None)),
         }
+    }
+
+    pub fn db_path(&self) -> &Path {
+        &self.db_path
     }
 
     pub fn db_path_exists(&self) -> bool {
@@ -71,14 +76,32 @@ impl DbManager {
     }
 
     fn get_key_cached(&self) -> std::io::Result<String> {
-        let mut cache = self.cached_key.lock().unwrap();
-        if let Some(key) = cache.as_ref() {
+        let cache_mutex = KEY_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+        let mut cache = cache_mutex.lock().unwrap();
+        
+        if let Some(key) = cache.get(&self.db_path) {
             return Ok(key.clone());
         }
 
         let key = self.key_provider.get_key()?;
-        *cache = Some(key.clone());
+        cache.insert(self.db_path.clone(), key.clone());
         Ok(key)
+    }
+
+    fn read_key_cached(&self) -> std::io::Result<Option<String>> {
+        let cache_mutex = KEY_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+        let mut cache = cache_mutex.lock().unwrap();
+
+        if let Some(key) = cache.get(&self.db_path) {
+            return Ok(Some(key.clone()));
+        }
+
+        if let Some(key) = self.key_provider.read_key()? {
+            cache.insert(self.db_path.clone(), key.clone());
+            Ok(Some(key))
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn connect(&self) -> Result<Connection> {
@@ -90,9 +113,19 @@ impl DbManager {
         }
 
         // If plaintext access fails, it might be encrypted. Try with key.
-        let key = self.get_key_cached().map_err(|e| {
+        let key_opt = self.read_key_cached().map_err(|e| {
             rusqlite::Error::UserFunctionError(Box::new(e))
         })?;
+
+        let key = match key_opt {
+            Some(k) => k,
+            None => {
+                return Err(rusqlite::Error::SqliteFailure(
+                    rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_NOTADB),
+                    Some("Failed to open database. Encrypted and no key found.".to_string())
+                ));
+            }
+        };
         
         conn.pragma_update(None, "key", &key)?;
         
@@ -121,7 +154,7 @@ impl DbManager {
     }
 
     fn run_migrations(&self) -> Result<(), IntegrityError> {
-        let conn = self.connect().expect("Could not connect to database");
+        let conn = self.connect()?;
         self.create_migrations_table(&conn)
             .expect("Could not create migrations table");
 
@@ -559,6 +592,15 @@ impl DbManager {
             });
         }
         Ok(environments)
+    }
+
+    pub fn is_locked(&self) -> Result<bool> {
+        let conn = Connection::open(&self.db_path)?;
+        // Try to access the database as plaintext
+        if conn.query_row("SELECT count(*) FROM sqlite_master", [], |_| Ok(())).is_ok() {
+            return Ok(false);
+        }
+        Ok(true)
     }
 
     pub fn lock(&self) -> Result<()> {

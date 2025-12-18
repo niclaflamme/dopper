@@ -319,6 +319,22 @@ fn test_encryption_flow() {
 }
 
 #[test]
+fn test_lock_status() {
+    let (manager, _dir, _db_path) = setup();
+    
+    // Initially unlocked
+    assert!(!manager.is_locked().expect("failed to check status"));
+
+    // Lock
+    manager.lock().expect("failed to lock");
+    assert!(manager.is_locked().expect("failed to check status"));
+
+    // Unlock
+    manager.unlock().expect("failed to unlock");
+    assert!(!manager.is_locked().expect("failed to check status"));
+}
+
+#[test]
 fn test_integrity_restores_default_envs() {
     let (manager, _dir, db_path) = setup();
     let project = manager.create_project("integrity_test").expect("failed to create");

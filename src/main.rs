@@ -70,9 +70,18 @@ enum Commands {
         file: String,
     },
     /// Encrypts the database (requires system auth)
-    Lock {},
+    Lock {
+        #[command(subcommand)]
+        command: Option<LockCommands>,
+    },
     /// Decrypts the database (stores in plaintext)
     Unlock {},
+}
+
+#[derive(Subcommand, Debug)]
+enum LockCommands {
+    /// Checks the lock status of the database
+    Status {},
 }
 
 #[derive(Subcommand, Debug)]
@@ -136,6 +145,12 @@ impl Dopper {
     }
 
     fn init(&self) {
+        if self.db_manager.db_path_exists() {
+            println!("Dopper database already exists at {:?}.", self.db_manager.db_path());
+            println!("If you want to re-initialize, please delete the database first using `dopper destroy` or manually deleting the file.");
+            return;
+        }
+
         self.db_manager
             .initialize_db()
             .expect("Database initialization failed");
@@ -483,6 +498,19 @@ impl Dopper {
         }
     }
 
+    fn lock_status(&self) {
+        match self.db_manager.is_locked() {
+            Ok(locked) => {
+                if locked {
+                    println!("locked");
+                } else {
+                    println!("unlocked");
+                }
+            }
+            Err(e) => eprintln!("Error checking lock status: {}", e),
+        }
+    }
+
     fn unlock(&self) {
         if !os::is_macos() {
             eprintln!("Unlocking is currently only supported on macOS.");
@@ -604,9 +632,14 @@ async fn main() -> anyhow::Result<()> {
         Commands::Restore { file } => {
             dopper.restore(file.clone());
         }
-        Commands::Lock {} => {
-            dopper.lock();
-        }
+        Commands::Lock { command } => match command {
+            Some(LockCommands::Status {}) => {
+                dopper.lock_status();
+            }
+            None => {
+                dopper.lock();
+            }
+        },
         Commands::Unlock {} => {
             dopper.unlock();
         }
