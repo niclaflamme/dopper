@@ -3,11 +3,14 @@ use comfy_table::{Row, Table};
 use directories::UserDirs;
 use std::env;
 use std::fs;
+use std::io::{self, Write};
 use std::path::PathBuf;
 use std::process::Command;
 
-mod db;
-use db::DbManager;
+use dopper::config::Config;
+use dopper::db::{self, DbManager};
+use dopper::os;
+use dopper::security::KeychainProvider;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Dopper: Environment variable manager with zero footprint", long_about = None)]
@@ -47,10 +50,29 @@ enum Commands {
         #[arg(long, short)]
         env: Option<String>,
     },
-    /// DEPRECATED: use `project list` or `secrets list` instead.
-    List {},
     /// Initializes Dopper by creating the necessary database
     Init {},
+    /// Destroys the database (Irrevocable)
+    Destroy {},
+    /// Dumps the database state to a JSON file (default) or stdout
+    Dump {
+        /// Output file path override
+        #[arg(long, short)]
+        file: Option<String>,
+
+        /// Print to stdout instead of file
+        #[arg(long)]
+        stdout: bool,
+    },
+    /// Restores the database state from a JSON file
+    Restore {
+        /// Input file path
+        file: String,
+    },
+    /// Encrypts the database (requires system auth)
+    Lock {},
+    /// Decrypts the database (stores in plaintext)
+    Unlock {},
 }
 
 #[derive(Subcommand, Debug)]
@@ -91,7 +113,14 @@ enum EnvCommands {
     Use { slug: String },
     /// Lists all environments for the current project
     List {},
+    /// Creates a new environment
+    Create { slug: String },
+    /// Deletes an environment (except 'dev' and 'prod')
+    Delete { slug: String },
 }
+
+// -------------------------------------------------------------------------------------------------
+// ---- Application --------------------------------------------------------------------------------
 
 struct Dopper {
     db_manager: DbManager,
@@ -100,7 +129,9 @@ struct Dopper {
 impl Dopper {
     fn new(base_dir: PathBuf) -> Self {
         fs::create_dir_all(&base_dir).expect("Could not create dopper directory");
-        let db_manager = DbManager::new(&base_dir);
+        let db_path = base_dir.join("dopper.db");
+        let key_provider = Box::new(KeychainProvider::new());
+        let db_manager = DbManager::new(db_path, key_provider);
         Dopper { db_manager }
     }
 
@@ -109,6 +140,49 @@ impl Dopper {
             .initialize_db()
             .expect("Database initialization failed");
         println!("Dopper initialized successfully.");
+
+        if os::is_macos() {
+            println!("\nWould you like to encrypt your database? (Recommended)");
+            println!(
+                "This will secure your secrets using your system keychain. You may be prompted for your system password when accessing Dopper."
+            );
+            print!("Enable encryption? (y/N): ");
+            io::stdout().flush().expect("Failed to flush stdout");
+
+            let mut input = String::new();
+            io::stdin()
+                .read_line(&mut input)
+                .expect("Failed to read input");
+
+            if input.trim().eq_ignore_ascii_case("y") || input.trim().eq_ignore_ascii_case("yes") {
+                self.lock();
+            } else {
+                println!(
+                    "Database left unencrypted (Plaintext). You can encrypt it later using `dopper lock`."
+                );
+            }
+        }
+    }
+
+    fn destroy(&self) {
+        print!(
+            "Are you sure you want to destroy the database? This action is irrevocable. (y/N): "
+        );
+        io::stdout().flush().expect("Failed to flush stdout");
+
+        let mut input = String::new();
+        io::stdin()
+            .read_line(&mut input)
+            .expect("Failed to read input");
+
+        if input.trim().eq_ignore_ascii_case("y") || input.trim().eq_ignore_ascii_case("yes") {
+            match self.db_manager.delete_database() {
+                Ok(_) => println!("Database destroyed successfully."),
+                Err(e) => eprintln!("Error destroying database: {}", e),
+            }
+        } else {
+            println!("Operation aborted.");
+        }
     }
 
     fn create_project(&self, name: &str) {
@@ -118,6 +192,23 @@ impl Dopper {
                 project.name, project.id
             ),
             Err(e) => eprintln!("Error creating project: {}", e),
+        }
+    }
+
+    fn delete_project(&self, name: &str) {
+        print!("Are you sure you want to delete project '{}' and ALL associated data (secrets, envs)? (y/N): ", name);
+        io::stdout().flush().expect("Failed to flush stdout");
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).expect("Failed to read input");
+
+        if input.trim().eq_ignore_ascii_case("y") || input.trim().eq_ignore_ascii_case("yes") {
+            match self.db_manager.delete_project(name) {
+                Ok(_) => println!("Project '{}' deleted successfully.", name),
+                Err(e) => eprintln!("Error deleting project: {}", e),
+            }
+        } else {
+            println!("Operation aborted.");
         }
     }
 
@@ -288,6 +379,121 @@ impl Dopper {
         }
     }
 
+    fn create_env(&self, slug: &str) {
+        if let Some(project) = self.get_project_from_current_dir() {
+            match self.db_manager.create_environment(&project.id, slug) {
+                Ok(_) => println!(
+                    "Environment '{}' created for project '{}'.",
+                    slug, project.name
+                ),
+                Err(e) => eprintln!("Error creating environment: {}", e),
+            }
+        }
+    }
+
+    fn delete_env(&self, slug: &str) {
+        if slug == "dev" || slug == "prod" {
+            eprintln!("Cannot delete default environment '{}'.", slug);
+            return;
+        }
+
+        if let Some(project) = self.get_project_from_current_dir() {
+            print!(
+                "Are you sure you want to delete environment '{}'? This action is irrevocable. (y/N): ",
+                slug
+            );
+            io::stdout().flush().expect("Failed to flush stdout");
+
+            let mut input = String::new();
+            io::stdin()
+                .read_line(&mut input)
+                .expect("Failed to read input");
+
+            if input.trim().eq_ignore_ascii_case("y") || input.trim().eq_ignore_ascii_case("yes") {
+                match self.db_manager.delete_environment(&project.id, slug) {
+                    Ok(_) => println!(
+                        "Environment '{}' deleted for project '{}'.",
+                        slug, project.name
+                    ),
+                    Err(e) => eprintln!("Error deleting environment: {}", e),
+                }
+            } else {
+                println!("Operation aborted.");
+            }
+        }
+    }
+
+    fn dump(&self, file: Option<String>, stdout: bool) {
+        match self.db_manager.dump() {
+            Ok(dump) => {
+                let json = serde_json::to_string_pretty(&dump).expect("Failed to serialize dump");
+
+                if stdout {
+                    println!("{}", json);
+                } else {
+                    let path = if let Some(f) = file {
+                        PathBuf::from(f)
+                    } else {
+                        let config = Config::load();
+                        config.get_dump_path()
+                    };
+
+                    fs::write(&path, json).expect("Failed to write dump file");
+                    println!("Database dumped to '{}'", path.display());
+                }
+            }
+            Err(e) => eprintln!("Error dumping database: {}", e),
+        }
+    }
+
+    fn restore(&self, file: String) {
+        let content = fs::read_to_string(&file).expect("Failed to read dump file");
+        let dump: db::DopperDump =
+            serde_json::from_str(&content).expect("Failed to parse dump file");
+
+        print!(
+            "This will OVERWRITE your current database with the content of '{}'. Are you sure? (y/N): ",
+            file
+        );
+        io::stdout().flush().expect("Failed to flush stdout");
+
+        let mut input = String::new();
+        io::stdin()
+            .read_line(&mut input)
+            .expect("Failed to read input");
+
+        if input.trim().eq_ignore_ascii_case("y") || input.trim().eq_ignore_ascii_case("yes") {
+            match self.db_manager.restore(dump) {
+                Ok(_) => println!("Database restored successfully from '{}'.", file),
+                Err(e) => eprintln!("Error restoring database: {}", e),
+            }
+        } else {
+            println!("Restore aborted.");
+        }
+    }
+
+    fn lock(&self) {
+        if !os::is_macos() {
+            eprintln!("Locking (encryption) is currently only supported on macOS.");
+            return;
+        }
+        match self.db_manager.lock() {
+            Ok(_) => println!("Database locked (encrypted) successfully."),
+            Err(e) => eprintln!("Error locking database: {}", e),
+        }
+    }
+
+    fn unlock(&self) {
+        if !os::is_macos() {
+            eprintln!("Unlocking is currently only supported on macOS.");
+            return;
+        }
+        match self.db_manager.unlock() {
+            Ok(_) => println!("Database unlocked (decrypted) successfully."),
+            Err(e) => eprintln!("Error unlocking database: {}", e),
+        }
+    }
+
     fn list_environments(&self) {
         if let Some(project) = self.get_project_from_current_dir() {
             match self.db_manager.list_environments(&project.id) {
@@ -309,6 +515,9 @@ impl Dopper {
     }
 }
 
+// -------------------------------------------------------------------------------------------------
+// ---- Main ---------------------------------------------------------------------------------------
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
@@ -318,6 +527,18 @@ async fn main() -> anyhow::Result<()> {
         .ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
 
     let dopper = Dopper::new(base_dir);
+
+    if !dopper.db_manager.db_path_exists() {
+        match &cli.command {
+            Commands::Init {} => {}
+            Commands::Destroy {} => {} // Destroy handles missing DB gracefully
+            Commands::Restore { .. } => {}
+            _ => {
+                println!("Dopper database not found. Please run `dopper init` to initialize.");
+                return Ok(());
+            }
+        }
+    }
 
     match &cli.command {
         Commands::Link { project_name } => {
@@ -336,7 +557,7 @@ async fn main() -> anyhow::Result<()> {
                 dopper.list_projects();
             }
             ProjectCommands::Delete { name } => {
-                println!("Delete project command received. Name: {}", name);
+                dopper.delete_project(name);
             }
         },
         Commands::Secrets { command } => match command {
@@ -357,6 +578,12 @@ async fn main() -> anyhow::Result<()> {
             EnvCommands::List {} => {
                 dopper.list_environments();
             }
+            EnvCommands::Create { slug } => {
+                dopper.create_env(slug);
+            }
+            EnvCommands::Delete { slug } => {
+                dopper.delete_env(slug);
+            }
         },
         Commands::Run { command, env } => {
             if command.is_empty() {
@@ -365,13 +592,28 @@ async fn main() -> anyhow::Result<()> {
                 dopper.run(command, env);
             }
         }
-        Commands::List {} => {
-            eprintln!("`list` is deprecated. Use `project list` or `secrets list` instead.");
-        }
         Commands::Init {} => {
             dopper.init();
+        }
+        Commands::Destroy {} => {
+            dopper.destroy();
+        }
+        Commands::Dump { file, stdout } => {
+            dopper.dump(file.clone(), *stdout);
+        }
+        Commands::Restore { file } => {
+            dopper.restore(file.clone());
+        }
+        Commands::Lock {} => {
+            dopper.lock();
+        }
+        Commands::Unlock {} => {
+            dopper.unlock();
         }
     }
 
     Ok(())
 }
+
+// -------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------

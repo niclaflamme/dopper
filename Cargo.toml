@@ -10,7 +10,16 @@ comfy-table = "7.2.1"
 directories = "5.0.1"
 md5 = "0.7.0"
 path-clean = "1.0.1"
-rusqlite = { version = "0.31.0", features = ["bundled"] }
+rusqlite = { version = "0.31.0", features = ["bundled-sqlcipher", "functions"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
 thiserror = "1.0.59"
 tokio = { version = "1.37.0", features = ["full"] }
+toml = "0.9.9"
 uuid = { version = "1.8.0", features = ["v4"] }
+keyring = "2"
+rand = "0.8"
+hex = "0.4"
+
+[dev-dependencies]
+tempfile = "3.23.0"
