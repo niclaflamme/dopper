@@ -1,5 +1,4 @@
-use crate::shared::db_manager::DbManager;
-use crate::shared::{ask_for_confirmation, get_project_from_current_dir};
+use crate::shared::{ask_for_confirmation, db_manager::DbManager, get_project_from_current_dir};
 
 pub fn delete_env(db_manager: &DbManager, slug: &str) {
     if slug == "dev" || slug == "prod" {

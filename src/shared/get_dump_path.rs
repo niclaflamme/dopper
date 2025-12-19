@@ -1,6 +1,8 @@
-use crate::types::Config;
-use directories::UserDirs;
 use std::path::PathBuf;
+
+use directories::UserDirs;
+
+use crate::types::Config;
 
 pub fn get_dump_path(config: &Config) -> PathBuf {
     if let Some(path_str) = &config.dump_path {

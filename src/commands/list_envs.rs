@@ -18,10 +18,7 @@ pub fn list_envs(db_manager: &DbManager) {
                     table.set_header(vec!["Active", "Slug"]);
                     for env in environments {
                         let is_active = if env.slug == active_env { "✔" } else { "" };
-                        table.add_row(Row::from(vec![
-                            is_active.to_string(),
-                            env.slug,
-                        ]));
+                        table.add_row(Row::from(vec![is_active.to_string(), env.slug]));
                     }
                     println!("{table}");
                 }

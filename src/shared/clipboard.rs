@@ -1,6 +1,7 @@
-use anyhow::{anyhow, Context, Result};
 use std::io::Write;
 use std::process::{Command, Stdio};
+
+use anyhow::{Context, Result, anyhow};
 
 fn pipe_to_command(program: &str, args: &[&str], contents: &str) -> Result<()> {
     let mut child = Command::new(program)
@@ -92,4 +93,3 @@ pub fn set_clipboard(contents: &str) -> Result<()> {
         Err(anyhow!("Clipboard is not supported on this platform"))
     }
 }
-

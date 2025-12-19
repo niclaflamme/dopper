@@ -1,8 +1,9 @@
-use md5;
-use rusqlite::Connection;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+
+use md5;
+use rusqlite::Connection;
 use uuid::Uuid;
 
 use crate::types::IntegrityError;

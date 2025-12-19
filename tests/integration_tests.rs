@@ -1,9 +1,14 @@
-use dopper::shared::db_manager::DbManager;
-use dopper::shared::keychain::MockKeyProvider;
-use dopper::shared::get_effective_env;
-use rusqlite::Connection;
 use std::fs;
+
+use rusqlite::Connection;
 use tempfile::tempdir;
+
+use dopper::shared::db_manager::DbManager;
+use dopper::shared::get_effective_env;
+use dopper::shared::keychain::MockKeyProvider;
+
+// -------------------------------------------------------------------------------------------------
+// ---- Setup --------------------------------------------------------------------------------------
 
 fn setup() -> (DbManager, tempfile::TempDir, std::path::PathBuf) {
     let dir = tempdir().expect("failed to create temp dir");
@@ -13,6 +18,9 @@ fn setup() -> (DbManager, tempfile::TempDir, std::path::PathBuf) {
     manager.initialize_db().expect("failed to init db");
     (manager, dir, db_path)
 }
+
+// -------------------------------------------------------------------------------------------------
+// ---- Tests --------------------------------------------------------------------------------------
 
 #[test]
 fn test_project_creation_and_listing() {
@@ -499,10 +507,18 @@ fn test_print_retrieval() {
         .expect("failed to set");
 
     let secrets = manager.get_secrets(&env.id).expect("failed to get secrets");
-    
+
     // We can't guarantee order from DB usually, so we check existence
-    assert!(secrets.iter().any(|s| s.key == "TEST_KEY" && s.value == "TEST_VALUE"));
-    assert!(secrets.iter().any(|s| s.key == "ANOTHER_KEY" && s.value == "12345"));
+    assert!(
+        secrets
+            .iter()
+            .any(|s| s.key == "TEST_KEY" && s.value == "TEST_VALUE")
+    );
+    assert!(
+        secrets
+            .iter()
+            .any(|s| s.key == "ANOTHER_KEY" && s.value == "12345")
+    );
     assert_eq!(secrets.len(), 2);
 }
 
@@ -515,14 +531,24 @@ fn test_get_effective_env_injection() {
     let env_slug = "dev";
 
     // We don't set any secrets, just check for system ones
-    manager.get_or_create_environment(&project.id, env_slug).unwrap();
+    manager
+        .get_or_create_environment(&project.id, env_slug)
+        .unwrap();
 
-    let env_vars = get_effective_env(&manager, &project, env_slug).expect("failed to get effective env");
+    let env_vars =
+        get_effective_env(&manager, &project, env_slug).expect("failed to get effective env");
 
-    assert!(env_vars
-        .iter()
-        .any(|(k, v)| k == "DOPPER_PROJECT_ID" && v == &project.id));
-    assert!(env_vars
-        .iter()
-        .any(|(k, v)| k == "DOPPER_ENV" && v == env_slug));
+    assert!(
+        env_vars
+            .iter()
+            .any(|(k, v)| k == "DOPPER_PROJECT_ID" && v == &project.id)
+    );
+    assert!(
+        env_vars
+            .iter()
+            .any(|(k, v)| k == "DOPPER_ENV" && v == env_slug)
+    );
 }
+
+// -------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------

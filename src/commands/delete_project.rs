@@ -1,5 +1,5 @@
-use crate::shared::db_manager::DbManager;
 use crate::shared::ask_for_confirmation;
+use crate::shared::db_manager::DbManager;
 
 pub fn delete_project(db_manager: &DbManager, name: &str) {
     if ask_for_confirmation(&format!(

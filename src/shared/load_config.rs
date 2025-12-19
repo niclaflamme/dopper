@@ -1,6 +1,8 @@
-use crate::types::Config;
-use directories::UserDirs;
 use std::fs;
+
+use directories::UserDirs;
+
+use crate::types::Config;
 
 pub fn load_config() -> Config {
     let config_path =

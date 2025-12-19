@@ -1,8 +1,10 @@
-use dopper::shared::db_manager::DbManager;
-use dopper::shared::keychain::KeyProvider;
 use std::io;
 use std::sync::{Arc, Mutex};
+
 use tempfile::tempdir;
+
+use dopper::shared::db_manager::DbManager;
+use dopper::shared::keychain::KeyProvider;
 
 struct CountingKeyProvider {
     key: String,

@@ -1,8 +1,9 @@
+use std::io;
+use std::sync::OnceLock;
+
 use keyring::Entry;
 use log::debug;
 use rand::RngCore;
-use std::io;
-use std::sync::OnceLock;
 
 pub trait KeyProvider {
     fn get_key(&self) -> io::Result<String>;
