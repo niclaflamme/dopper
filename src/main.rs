@@ -111,12 +111,18 @@ enum SecretsCommands {
         value: Option<String>,
         #[arg(long, short, default_value = "dev")]
         env: String,
+        /// Skip confirmation prompt
+        #[arg(long, short = 'y')]
+        yes: bool,
     },
     /// Unsets a secret for the current project
     Unset {
         key: String,
         #[arg(long, short, default_value = "dev")]
         env: String,
+        /// Skip confirmation prompt
+        #[arg(long, short = 'y')]
+        yes: bool,
     },
     /// Lists secrets for the current project
     List {
@@ -180,11 +186,11 @@ async fn main() -> anyhow::Result<()> {
             }
         },
         Commands::Secrets { command } => match command {
-            SecretsCommands::Set { key, value, env } => {
-                commands::set_secret(&db_manager, key, value.as_deref(), env);
+            SecretsCommands::Set { key, value, env, yes } => {
+                commands::set_secret(&db_manager, key, value.as_deref(), env, *yes);
             }
-            SecretsCommands::Unset { key, env } => {
-                commands::unset_secret(&db_manager, key, env);
+            SecretsCommands::Unset { key, env, yes } => {
+                commands::unset_secret(&db_manager, key, env, *yes);
             }
             SecretsCommands::List { env } => {
                 commands::list_secrets(&db_manager, env.clone());

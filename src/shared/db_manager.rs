@@ -486,6 +486,13 @@ impl DbManager {
         Ok(secrets)
     }
 
+    pub fn secret_exists(&self, env_id: &str, key: &str) -> Result<bool> {
+        let conn = self.connect()?;
+        let mut stmt =
+            conn.prepare("SELECT 1 FROM secrets WHERE env_id = ? AND key = ?")?;
+        Ok(stmt.exists(&[env_id, key])?)
+    }
+
     pub fn set_active_environment(&self, project_id: &str, slug: &str) -> Result<()> {
         let conn = self.connect()?;
         conn.execute(
