@@ -85,13 +85,6 @@ enum Commands {
         #[arg(long, short)]
         env: Option<String>,
     },
-    /// Direct access to set a secret
-    Set {
-        key: String,
-        value: Option<String>,
-        #[arg(long, short, default_value = "dev")]
-        env: String,
-    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -242,9 +235,6 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Clip { env } => {
             commands::clip(&db_manager, env.clone());
-        }
-        Commands::Set { key, value, env } => {
-            commands::set_secret(&db_manager, key, value.as_deref(), env);
         }
     }
 
