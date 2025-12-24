@@ -85,6 +85,13 @@ enum Commands {
         #[arg(long, short)]
         env: Option<String>,
     },
+    /// Direct access to set a secret
+    Set {
+        key: String,
+        value: Option<String>,
+        #[arg(long, short, default_value = "dev")]
+        env: String,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -108,7 +115,7 @@ enum SecretsCommands {
     /// Sets a secret for the current project
     Set {
         key: String,
-        value: String,
+        value: Option<String>,
         #[arg(long, short, default_value = "dev")]
         env: String,
     },
@@ -181,7 +188,7 @@ async fn main() -> anyhow::Result<()> {
         },
         Commands::Secrets { command } => match command {
             SecretsCommands::Set { key, value, env } => {
-                commands::set_secret(&db_manager, key, value, env);
+                commands::set_secret(&db_manager, key, value.as_deref(), env);
             }
             SecretsCommands::Unset { key, env } => {
                 commands::unset_secret(&db_manager, key, env);
@@ -235,6 +242,9 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Clip { env } => {
             commands::clip(&db_manager, env.clone());
+        }
+        Commands::Set { key, value, env } => {
+            commands::set_secret(&db_manager, key, value.as_deref(), env);
         }
     }
 
