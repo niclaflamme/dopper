@@ -146,6 +146,12 @@ enum EnvCommands {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     env_logger::init();
+
+    if !dopper::shared::is_macos() {
+        eprintln!("Dopper currently only supports macOS.");
+        std::process::exit(1);
+    }
+
     let cli = Cli::parse();
 
     let base_dir = UserDirs::new()
