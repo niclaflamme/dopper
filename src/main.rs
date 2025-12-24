@@ -4,8 +4,8 @@ use clap::{Parser, Subcommand};
 use directories::UserDirs;
 
 use dopper::commands;
+use dopper::security::{derive_key, MasterKey};
 use dopper::shared::db_manager::DbManager;
-use dopper::shared::keychain::KeychainProvider;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Dopper: Environment variable manager with zero footprint", long_about = None)]
@@ -161,8 +161,8 @@ async fn main() -> anyhow::Result<()> {
     // Setup DbManager
     fs::create_dir_all(&base_dir).expect("Could not create dopper directory");
     let db_path = base_dir.join("dopper.db");
-    let key_provider = Box::new(KeychainProvider::new());
-    let db_manager = DbManager::new(db_path, key_provider);
+    let salt_path = base_dir.join("salt");
+    let db_manager = DbManager::new(db_path);
 
     if !db_manager.db_path_exists() {
         match &cli.command {
@@ -176,60 +176,90 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
+    let master_key = match &cli.command {
+        Commands::Init {} | Commands::Destroy {} | Commands::Lock { .. } | Commands::Unlock {} => None,
+        _ => Some(load_master_key(&salt_path)?),
+    };
+
+    if let Some(master_key) = master_key.as_ref() {
+        if db_manager.db_path_exists() {
+            if let Err(err) = db_manager.connect(master_key) {
+                if is_incorrect_password(&err) {
+                    eprintln!("Access Denied: Incorrect Password");
+                    std::process::exit(1);
+                }
+                return Err(err.into());
+            }
+        }
+    }
+
     match &cli.command {
         Commands::Link { project_name } => {
-            commands::link(&db_manager, project_name.clone());
+            commands::link(&db_manager, master_key.as_ref().unwrap(), project_name.clone());
         }
         Commands::Project { command } => match command {
             ProjectCommands::Create { name } => {
-                commands::create_project(&db_manager, name);
+                commands::create_project(&db_manager, master_key.as_ref().unwrap(), name);
             }
             ProjectCommands::List {} => {
-                commands::list_projects(&db_manager);
+                commands::list_projects(&db_manager, master_key.as_ref().unwrap());
             }
             ProjectCommands::Delete { name } => {
-                commands::delete_project(&db_manager, name);
+                commands::delete_project(&db_manager, master_key.as_ref().unwrap(), name);
             }
         },
         Commands::Secrets { command } => match command {
             SecretsCommands::Set { key, value, env, yes } => {
-                commands::set_secret(&db_manager, key, value.as_deref(), env, *yes);
+                commands::set_secret(
+                    &db_manager,
+                    master_key.as_ref().unwrap(),
+                    key,
+                    value.as_deref(),
+                    env,
+                    *yes,
+                );
             }
             SecretsCommands::Unset { key, env, yes } => {
-                commands::unset_secret(&db_manager, key, env, *yes);
+                commands::unset_secret(
+                    &db_manager,
+                    master_key.as_ref().unwrap(),
+                    key,
+                    env,
+                    *yes,
+                );
             }
             SecretsCommands::List { env } => {
-                commands::list_secrets(&db_manager, env.clone());
+                commands::list_secrets(&db_manager, master_key.as_ref().unwrap(), env.clone());
             }
         },
         Commands::Env { command } => match command {
             EnvCommands::Use { slug } => {
-                commands::use_env(&db_manager, slug);
+                commands::use_env(&db_manager, master_key.as_ref().unwrap(), slug);
             }
             EnvCommands::List {} => {
-                commands::list_envs(&db_manager);
+                commands::list_envs(&db_manager, master_key.as_ref().unwrap());
             }
             EnvCommands::Create { slug } => {
-                commands::create_env(&db_manager, slug);
+                commands::create_env(&db_manager, master_key.as_ref().unwrap(), slug);
             }
             EnvCommands::Delete { slug } => {
-                commands::delete_env(&db_manager, slug);
+                commands::delete_env(&db_manager, master_key.as_ref().unwrap(), slug);
             }
         },
         Commands::Run { command, env } => {
-            commands::run(&db_manager, command, env);
+            commands::run(&db_manager, master_key.as_ref().unwrap(), command, env);
         }
         Commands::Init {} => {
-            commands::init(&db_manager);
+            commands::init(&db_manager, &salt_path);
         }
         Commands::Destroy {} => {
             commands::destroy(&db_manager);
         }
         Commands::Dump { file, stdout } => {
-            commands::dump(&db_manager, file.clone(), *stdout);
+            commands::dump(&db_manager, master_key.as_ref().unwrap(), file.clone(), *stdout);
         }
         Commands::Restore { file } => {
-            commands::restore(&db_manager, file.clone());
+            commands::restore(&db_manager, master_key.as_ref().unwrap(), file.clone());
         }
         Commands::Lock { command } => match command {
             Some(LockCommands::Status {}) => {
@@ -243,12 +273,38 @@ async fn main() -> anyhow::Result<()> {
             commands::unlock(&db_manager);
         }
         Commands::Print { env, yes } => {
-            commands::print(&db_manager, env.clone(), *yes);
+            commands::print(&db_manager, master_key.as_ref().unwrap(), env.clone(), *yes);
         }
         Commands::Clip { env } => {
-            commands::clip(&db_manager, env.clone());
+            commands::clip(&db_manager, master_key.as_ref().unwrap(), env.clone());
         }
     }
 
     Ok(())
+}
+
+fn load_master_key(salt_path: &std::path::Path) -> anyhow::Result<MasterKey> {
+    if !salt_path.exists() {
+        eprintln!("Master password salt not found. Please run `dopper init`.");
+        std::process::exit(1);
+    }
+
+    let salt = fs::read_to_string(salt_path)?.trim().to_string();
+    let password = prompt_password("Enter Master Password: ");
+    derive_key(&password, &salt)
+}
+
+fn prompt_password(prompt: &str) -> String {
+    use std::io::Write;
+
+    eprint!("{}", prompt);
+    std::io::stderr().flush().expect("Failed to flush stderr");
+    rpassword::read_password().expect("Failed to read password")
+}
+
+fn is_incorrect_password(err: &rusqlite::Error) -> bool {
+    match err {
+        rusqlite::Error::SqliteFailure(_, Some(msg)) => msg == "Incorrect Password",
+        _ => false,
+    }
 }

@@ -1,14 +1,21 @@
 use crate::shared::ask_for_confirmation;
+use crate::security::MasterKey;
 use crate::shared::db_manager::DbManager;
 use crate::shared::get_project_from_current_dir;
 
-pub fn unset_secret(db_manager: &DbManager, key: &str, env: &str, yes: bool) {
-    if let Some(project) = get_project_from_current_dir(db_manager) {
-        match db_manager.get_environment(&project.id, env) {
+pub fn unset_secret(
+    db_manager: &DbManager,
+    master_key: &MasterKey,
+    key: &str,
+    env: &str,
+    yes: bool,
+) {
+    if let Some(project) = get_project_from_current_dir(db_manager, master_key) {
+        match db_manager.get_environment(master_key, &project.id, env) {
             Ok(environment) => {
                 if !yes {
                     // Check if it exists first
-                    match db_manager.secret_exists(&environment.id, key) {
+                    match db_manager.secret_exists(master_key, &environment.id, key) {
                         Ok(true) => {
                             if !ask_for_confirmation("This action is irrevocable. Are you sure?") {
                                 return;
@@ -28,7 +35,7 @@ pub fn unset_secret(db_manager: &DbManager, key: &str, env: &str, yes: bool) {
                     }
                 }
 
-                match db_manager.unset_secret(&environment.id, key) {
+                match db_manager.unset_secret(master_key, &environment.id, key) {
                     Ok(_) => println!(
                         "Secret '{}' unset for project '{}' in environment '{}'.",
                         key, project.name, env

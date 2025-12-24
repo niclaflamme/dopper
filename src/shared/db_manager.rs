@@ -1,28 +1,20 @@
-use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock};
 
 use path_clean::PathClean;
 use rusqlite::{Connection, Result};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::shared::keychain::KeyProvider;
 use crate::shared::verify_integrity;
 use crate::types::IntegrityError;
-
-// -------------------------------------------------------------------------------------------------
-// ----- Constants  --------------------------------------------------------------------------------
-
-static KEY_CACHE: OnceLock<Mutex<HashMap<PathBuf, String>>> = OnceLock::new();
+use crate::security::MasterKey;
 
 // -------------------------------------------------------------------------------------------------
 // ----- Types -------------------------------------------------------------------------------------
 
 pub struct DbManager {
     db_path: PathBuf,
-    key_provider: Box<dyn KeyProvider + Send + Sync>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -65,11 +57,8 @@ pub struct DopperDump {
 // ---- Implementation -----------------------------------------------------------------------------
 
 impl DbManager {
-    pub fn new(db_path: PathBuf, key_provider: Box<dyn KeyProvider + Send + Sync>) -> Self {
-        DbManager {
-            db_path,
-            key_provider,
-        }
+    pub fn new(db_path: PathBuf) -> Self {
+        DbManager { db_path }
     }
 
     pub fn db_path(&self) -> &Path {
@@ -80,80 +69,20 @@ impl DbManager {
         self.db_path.exists()
     }
 
-    fn key_cache_id(&self) -> PathBuf {
-        self.db_path.clean()
-    }
-
-    fn get_key_cached(&self) -> std::io::Result<String> {
-        let cache_mutex = KEY_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
-        let mut cache = cache_mutex.lock().unwrap();
-
-        let cache_id = self.key_cache_id();
-        if let Some(key) = cache.get(&cache_id) {
-            return Ok(key.clone());
-        }
-
-        let key = self.key_provider.get_key()?;
-        cache.insert(cache_id, key.clone());
-        Ok(key)
-    }
-
-    fn read_key_cached(&self) -> std::io::Result<Option<String>> {
-        let cache_mutex = KEY_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
-        let mut cache = cache_mutex.lock().unwrap();
-
-        let cache_id = self.key_cache_id();
-        if let Some(key) = cache.get(&cache_id) {
-            return Ok(Some(key.clone()));
-        }
-
-        if let Some(key) = self.key_provider.read_key()? {
-            cache.insert(cache_id, key.clone());
-            Ok(Some(key))
-        } else {
-            Ok(None)
-        }
-    }
-
-    pub fn connect(&self) -> Result<Connection> {
+    pub fn connect(&self, key: &MasterKey) -> Result<Connection> {
         log::debug!("Connecting to database at {:?}", self.db_path);
         let conn = Connection::open(&self.db_path)?;
 
-        // Try to access the database as plaintext first
-        if conn
-            .query_row("SELECT count(*) FROM sqlite_master", [], |_| Ok(()))
-            .is_ok()
-        {
-            log::debug!("Database opened as plaintext");
-            return Ok(conn);
-        }
-
-        log::debug!("Plaintext access failed, attempting to unlock with key");
-
-        // If plaintext access fails, it might be encrypted. Try with key.
-        let key_opt = self
-            .read_key_cached()
-            .map_err(|e| rusqlite::Error::UserFunctionError(Box::new(e)))?;
-
-        let key = match key_opt {
-            Some(k) => k,
-            None => {
-                log::debug!("No key found, cannot open encrypted database");
-                return Err(rusqlite::Error::SqliteFailure(
-                    rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_NOTADB),
-                    Some("Failed to open database. Encrypted and no key found.".to_string()),
-                ));
-            }
-        };
-
-        conn.pragma_update(None, "key", &key)?;
+        let key_hex = hex::encode(&key.0);
+        let pragma = format!("PRAGMA key = 'x''{}'''", key_hex);
+        conn.execute_batch(&pragma)?;
 
         // Verify key works
         if let Err(_) = conn.query_row("SELECT count(*) FROM sqlite_master", [], |_| Ok(())) {
             log::debug!("Key failed to unlock database");
             return Err(rusqlite::Error::SqliteFailure(
                 rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_NOTADB),
-                Some("Failed to open database. Invalid key or corrupted file.".to_string()),
+                Some("Incorrect Password".to_string()),
             ));
         }
 
@@ -161,21 +90,21 @@ impl DbManager {
         Ok(conn)
     }
 
-    pub fn initialize_db(&self) -> Result<()> {
-        if let Err(e) = self.run_migrations() {
+    pub fn initialize_db(&self, key: &MasterKey) -> Result<()> {
+        if let Err(e) = self.run_migrations(key) {
             eprintln!(
                 "Migration integrity error: {}. Deleting database and starting over.",
                 e
             );
             fs::remove_file(&self.db_path).expect("Failed to delete corrupted database");
-            self.run_migrations()
+            self.run_migrations(key)
                 .expect("Failed to initialize database after reset");
         }
         Ok(())
     }
 
-    fn run_migrations(&self) -> Result<(), IntegrityError> {
-        let conn = self.connect()?;
+    fn run_migrations(&self, key: &MasterKey) -> Result<(), IntegrityError> {
+        let conn = self.connect(key)?;
         self.create_migrations_table(&conn)
             .expect("Could not create migrations table");
 
@@ -229,8 +158,8 @@ impl DbManager {
         Ok(())
     }
 
-    pub fn create_project(&self, name: &str) -> Result<Project> {
-        let conn = self.connect()?;
+    pub fn create_project(&self, key: &MasterKey, name: &str) -> Result<Project> {
+        let conn = self.connect(key)?;
         let project_id = Uuid::new_v4().to_string();
         conn.execute(
             "INSERT INTO projects (project_id, name) VALUES (?, ?)",
@@ -250,12 +179,12 @@ impl DbManager {
         )?;
 
         // Not the most efficient, but it's simple and works.
-        self.get_project_by_id(&project_id)
+        self.get_project_by_id(key, &project_id)
     }
 
-    pub fn delete_project(&self, name: &str) -> Result<()> {
-        let conn = self.connect()?;
-        let project = self.get_project_by_name(name)?;
+    pub fn delete_project(&self, key: &MasterKey, name: &str) -> Result<()> {
+        let conn = self.connect(key)?;
+        let project = self.get_project_by_name(key, name)?;
 
         let tx = conn.unchecked_transaction()?;
 
@@ -291,8 +220,8 @@ impl DbManager {
         Ok(())
     }
 
-    pub fn list_projects(&self) -> Result<Vec<Project>> {
-        let conn = self.connect()?;
+    pub fn list_projects(&self, key: &MasterKey) -> Result<Vec<Project>> {
+        let conn = self.connect(key)?;
         let mut stmt = conn.prepare("SELECT project_id, name, created_at FROM projects")?;
         let mut rows = stmt.query([])?;
         let mut projects = Vec::new();
@@ -306,8 +235,8 @@ impl DbManager {
         Ok(projects)
     }
 
-    pub fn get_project_by_id(&self, project_id: &str) -> Result<Project> {
-        let conn = self.connect()?;
+    pub fn get_project_by_id(&self, key: &MasterKey, project_id: &str) -> Result<Project> {
+        let conn = self.connect(key)?;
         let mut stmt =
             conn.prepare("SELECT project_id, name, created_at FROM projects WHERE project_id = ?")?;
         stmt.query_row(&[project_id], |row| {
@@ -319,8 +248,8 @@ impl DbManager {
         })
     }
 
-    pub fn get_project_by_name(&self, name: &str) -> Result<Project> {
-        let conn = self.connect()?;
+    pub fn get_project_by_name(&self, key: &MasterKey, name: &str) -> Result<Project> {
+        let conn = self.connect(key)?;
         let mut stmt =
             conn.prepare("SELECT project_id, name, created_at FROM projects WHERE name = ?")?;
         stmt.query_row(&[name], |row| {
@@ -332,8 +261,8 @@ impl DbManager {
         })
     }
 
-    pub fn link_directory(&self, project_id: &str, path: &Path) -> Result<()> {
-        let conn = self.connect()?;
+    pub fn link_directory(&self, key: &MasterKey, project_id: &str, path: &Path) -> Result<()> {
+        let conn = self.connect(key)?;
         let path_str = path
             .to_str()
             .ok_or(rusqlite::Error::InvalidPath(path.to_path_buf()))?;
@@ -344,8 +273,8 @@ impl DbManager {
         Ok(())
     }
 
-    pub fn get_project_from_path(&self, path: &Path) -> Result<Option<Project>> {
-        let conn = self.connect()?;
+    pub fn get_project_from_path(&self, key: &MasterKey, path: &Path) -> Result<Option<Project>> {
+        let conn = self.connect(key)?;
         let mut current_path = PathBuf::from(path).clean();
 
         loop {
@@ -372,10 +301,15 @@ impl DbManager {
         }
     }
 
-    pub fn create_environment(&self, project_id: &str, slug: &str) -> Result<Environment> {
-        let conn = self.connect()?;
+    pub fn create_environment(
+        &self,
+        key: &MasterKey,
+        project_id: &str,
+        slug: &str,
+    ) -> Result<Environment> {
+        let conn = self.connect(key)?;
         // Check existence first to return a clear error/avoid duplication logic in caller
-        match self.get_environment(project_id, slug) {
+        match self.get_environment(key, project_id, slug) {
             Ok(_) => {
                 return Err(rusqlite::Error::ToSqlConversionFailure(
                     format!("Environment '{}' already exists", slug).into(),
@@ -387,14 +321,14 @@ impl DbManager {
                     "INSERT INTO environments (env_id, project_id, slug) VALUES (?, ?, ?)",
                     &[&env_id, project_id, slug],
                 )?;
-                self.get_environment_by_id(&env_id)
+                self.get_environment_by_id(key, &env_id)
             }
             Err(e) => Err(e),
         }
     }
 
-    pub fn delete_environment(&self, project_id: &str, slug: &str) -> Result<()> {
-        let conn = self.connect()?;
+    pub fn delete_environment(&self, key: &MasterKey, project_id: &str, slug: &str) -> Result<()> {
+        let conn = self.connect(key)?;
         conn.execute(
             "DELETE FROM environments WHERE project_id = ? AND slug = ?",
             &[project_id, slug],
@@ -408,9 +342,14 @@ impl DbManager {
         Ok(())
     }
 
-    pub fn get_or_create_environment(&self, project_id: &str, slug: &str) -> Result<Environment> {
-        let conn = self.connect()?;
-        match self.get_environment(project_id, slug) {
+    pub fn get_or_create_environment(
+        &self,
+        key: &MasterKey,
+        project_id: &str,
+        slug: &str,
+    ) -> Result<Environment> {
+        let conn = self.connect(key)?;
+        match self.get_environment(key, project_id, slug) {
             Ok(env) => Ok(env),
             Err(rusqlite::Error::QueryReturnedNoRows) => {
                 let env_id = Uuid::new_v4().to_string();
@@ -418,14 +357,19 @@ impl DbManager {
                     "INSERT INTO environments (env_id, project_id, slug) VALUES (?, ?, ?)",
                     &[&env_id, project_id, slug],
                 )?;
-                self.get_environment_by_id(&env_id)
+                self.get_environment_by_id(key, &env_id)
             }
             Err(e) => Err(e),
         }
     }
 
-    pub fn get_environment(&self, project_id: &str, slug: &str) -> Result<Environment> {
-        let conn = self.connect()?;
+    pub fn get_environment(
+        &self,
+        key: &MasterKey,
+        project_id: &str,
+        slug: &str,
+    ) -> Result<Environment> {
+        let conn = self.connect(key)?;
         let mut stmt = conn.prepare(
             "SELECT env_id, project_id, slug FROM environments WHERE project_id = ? AND slug = ?",
         )?;
@@ -438,8 +382,8 @@ impl DbManager {
         })
     }
 
-    fn get_environment_by_id(&self, env_id: &str) -> Result<Environment> {
-        let conn = self.connect()?;
+    fn get_environment_by_id(&self, key: &MasterKey, env_id: &str) -> Result<Environment> {
+        let conn = self.connect(key)?;
         let mut stmt =
             conn.prepare("SELECT env_id, project_id, slug FROM environments WHERE env_id = ?")?;
         stmt.query_row(&[env_id], |row| {
@@ -451,8 +395,14 @@ impl DbManager {
         })
     }
 
-    pub fn set_secret(&self, env_id: &str, key: &str, value: &str) -> Result<()> {
-        let conn = self.connect()?;
+    pub fn set_secret(
+        &self,
+        master_key: &MasterKey,
+        env_id: &str,
+        key: &str,
+        value: &str,
+    ) -> Result<()> {
+        let conn = self.connect(master_key)?;
         let secret_id = Uuid::new_v4().to_string();
         conn.execute(
             "INSERT OR REPLACE INTO secrets (secret_id, env_id, key, value) VALUES (?, ?, ?, ?)",
@@ -461,8 +411,8 @@ impl DbManager {
         Ok(())
     }
 
-    pub fn unset_secret(&self, env_id: &str, key: &str) -> Result<()> {
-        let conn = self.connect()?;
+    pub fn unset_secret(&self, master_key: &MasterKey, env_id: &str, key: &str) -> Result<()> {
+        let conn = self.connect(master_key)?;
         conn.execute(
             "DELETE FROM secrets WHERE env_id = ? AND key = ?",
             &[env_id, key],
@@ -470,8 +420,8 @@ impl DbManager {
         Ok(())
     }
 
-    pub fn get_secrets(&self, env_id: &str) -> Result<Vec<Secret>> {
-        let conn = self.connect()?;
+    pub fn get_secrets(&self, master_key: &MasterKey, env_id: &str) -> Result<Vec<Secret>> {
+        let conn = self.connect(master_key)?;
         let mut stmt = conn.prepare("SELECT key, value FROM secrets WHERE env_id = ?")?;
         let mut rows = stmt.query(&[env_id])?;
         let mut secrets = Vec::new();
@@ -486,15 +436,25 @@ impl DbManager {
         Ok(secrets)
     }
 
-    pub fn secret_exists(&self, env_id: &str, key: &str) -> Result<bool> {
-        let conn = self.connect()?;
+    pub fn secret_exists(
+        &self,
+        master_key: &MasterKey,
+        env_id: &str,
+        key: &str,
+    ) -> Result<bool> {
+        let conn = self.connect(master_key)?;
         let mut stmt =
             conn.prepare("SELECT 1 FROM secrets WHERE env_id = ? AND key = ?")?;
         Ok(stmt.exists(&[env_id, key])?)
     }
 
-    pub fn set_active_environment(&self, project_id: &str, slug: &str) -> Result<()> {
-        let conn = self.connect()?;
+    pub fn set_active_environment(
+        &self,
+        master_key: &MasterKey,
+        project_id: &str,
+        slug: &str,
+    ) -> Result<()> {
+        let conn = self.connect(master_key)?;
         conn.execute(
             "INSERT OR REPLACE INTO active_states (project_id, active_slug) VALUES (?, ?)",
             &[project_id, slug],
@@ -502,8 +462,8 @@ impl DbManager {
         Ok(())
     }
 
-    pub fn get_active_environment(&self, project_id: &str) -> Result<String> {
-        let conn = self.connect()?;
+    pub fn get_active_environment(&self, master_key: &MasterKey, project_id: &str) -> Result<String> {
+        let conn = self.connect(master_key)?;
         let mut stmt =
             conn.prepare("SELECT active_slug FROM active_states WHERE project_id = ?")?;
 
@@ -514,8 +474,8 @@ impl DbManager {
         }
     }
 
-    pub fn dump(&self) -> Result<DopperDump> {
-        let conn = self.connect()?;
+    pub fn dump(&self, master_key: &MasterKey) -> Result<DopperDump> {
+        let conn = self.connect(master_key)?;
 
         // Projects
         let mut stmt = conn.prepare("SELECT project_id, name, created_at FROM projects")?;
@@ -573,9 +533,9 @@ impl DbManager {
         })
     }
 
-    pub fn restore(&self, dump: DopperDump) -> Result<()> {
-        self.initialize_db()?;
-        let mut conn = self.connect()?;
+    pub fn restore(&self, master_key: &MasterKey, dump: DopperDump) -> Result<()> {
+        self.initialize_db(master_key)?;
+        let mut conn = self.connect(master_key)?;
         let tx = conn.transaction()?;
 
         // Clear existing data
@@ -627,8 +587,12 @@ impl DbManager {
         Ok(())
     }
 
-    pub fn list_environments(&self, project_id: &str) -> Result<Vec<Environment>> {
-        let conn = self.connect()?;
+    pub fn list_environments(
+        &self,
+        master_key: &MasterKey,
+        project_id: &str,
+    ) -> Result<Vec<Environment>> {
+        let conn = self.connect(master_key)?;
         let mut stmt =
             conn.prepare("SELECT env_id, project_id, slug FROM environments WHERE project_id = ?")?;
         let mut rows = stmt.query(&[project_id])?;
@@ -643,101 +607,6 @@ impl DbManager {
         Ok(environments)
     }
 
-    pub fn is_locked(&self) -> Result<bool> {
-        let conn = Connection::open(&self.db_path)?;
-        // Try to access the database as plaintext
-        if conn
-            .query_row("SELECT count(*) FROM sqlite_master", [], |_| Ok(()))
-            .is_ok()
-        {
-            return Ok(false);
-        }
-        Ok(true)
-    }
-
-    pub fn lock(&self) -> Result<()> {
-        if self.is_locked()? {
-            log::debug!("Database is already locked");
-            return Ok(());
-        }
-
-        log::debug!("Starting database encryption (lock)");
-        let conn = self.connect()?;
-
-        // Check if already encrypted (we know it's encrypted if PRAGMA key was needed,
-        // but connect() handles both. We can check via PRAGMA cipher_version or similar,
-        // but easier: just re-encrypt logic works for plaintext->encrypted too).
-        // Actually, sqlcipher_export works from any valid connection to a new one.
-
-        let key = self
-            .get_key_cached()
-            .map_err(|e| rusqlite::Error::UserFunctionError(Box::new(e)))?;
-
-        let new_path = self.db_path.with_extension("db.tmp");
-        if new_path.exists() {
-            fs::remove_file(&new_path)
-                .map_err(|e| rusqlite::Error::UserFunctionError(Box::new(e)))?;
-        }
-
-        // Attach new encrypted database
-        let attach_sql = format!(
-            "ATTACH DATABASE '{}' AS encrypted KEY '{}'",
-            new_path.display(),
-            key
-        );
-        conn.execute(&attach_sql, [])?;
-
-        // Export
-        conn.query_row("SELECT sqlcipher_export('encrypted')", [], |_| Ok(()))?;
-        conn.execute("DETACH DATABASE encrypted", [])?;
-
-        // Close connection to allow file swap
-        drop(conn);
-
-        fs::rename(&new_path, &self.db_path)
-            .map_err(|e| rusqlite::Error::UserFunctionError(Box::new(e)))?;
-
-        log::debug!("Database encryption completed");
-        Ok(())
-    }
-
-    pub fn unlock(&self) -> Result<()> {
-        if !self.is_locked()? {
-            log::debug!("Database is already unlocked");
-            return Ok(());
-        }
-
-        log::debug!("Starting database decryption (unlock)");
-        let conn = self.connect()?;
-
-        // We assume conn is valid. If it was encrypted, key is set. If plaintext, no key.
-
-        let new_path = self.db_path.with_extension("db.tmp");
-        if new_path.exists() {
-            fs::remove_file(&new_path)
-                .map_err(|e| rusqlite::Error::UserFunctionError(Box::new(e)))?;
-        }
-
-        // Attach new plaintext database (KEY '')
-        let attach_sql = format!(
-            "ATTACH DATABASE '{}' AS plaintext KEY ''",
-            new_path.display()
-        );
-        conn.execute(&attach_sql, [])?;
-
-        // Export
-        conn.query_row("SELECT sqlcipher_export('plaintext')", [], |_| Ok(()))?;
-        conn.execute("DETACH DATABASE plaintext", [])?;
-
-        // Close connection
-        drop(conn);
-
-        fs::rename(&new_path, &self.db_path)
-            .map_err(|e| rusqlite::Error::UserFunctionError(Box::new(e)))?;
-
-        log::debug!("Database decryption completed");
-        Ok(())
-    }
 }
 
 // -------------------------------------------------------------------------------------------------

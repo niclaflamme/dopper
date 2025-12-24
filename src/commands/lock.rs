@@ -1,26 +1,9 @@
 use crate::shared::db_manager::DbManager;
-use crate::shared::is_macos;
 
 pub fn lock(db_manager: &DbManager) {
-    if !is_macos() {
-        eprintln!("Locking (encryption) is currently only supported on macOS.");
+    if !db_manager.db_path_exists() {
+        eprintln!("Dopper database not found. Please run `dopper init` to initialize.");
         return;
     }
-
-    match db_manager.is_locked() {
-        Ok(true) => {
-            println!("Database is already locked.");
-            return;
-        }
-        Err(e) => {
-            eprintln!("Error checking lock status: {}", e);
-            return;
-        }
-        Ok(false) => {}
-    }
-
-    match db_manager.lock() {
-        Ok(_) => println!("Database locked (encrypted) successfully."),
-        Err(e) => eprintln!("Error locking database: {}", e),
-    }
+    println!("Database encryption is always enabled with the master password.");
 }

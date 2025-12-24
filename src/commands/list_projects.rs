@@ -1,7 +1,8 @@
+use crate::security::MasterKey;
 use crate::shared::db_manager::DbManager;
 
-pub fn list_projects(db_manager: &DbManager) {
-    match db_manager.list_projects() {
+pub fn list_projects(db_manager: &DbManager, master_key: &MasterKey) {
+    match db_manager.list_projects(master_key) {
         Ok(projects) => {
             if projects.is_empty() {
                 println!("No projects found.");

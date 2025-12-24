@@ -1,17 +1,18 @@
 use comfy_table::{Row, Table};
 
+use crate::security::MasterKey;
 use crate::shared::db_manager::DbManager;
 use crate::shared::get_project_from_current_dir;
 
-pub fn list_envs(db_manager: &DbManager) {
-    if let Some(project) = get_project_from_current_dir(db_manager) {
-        match db_manager.list_environments(&project.id) {
+pub fn list_envs(db_manager: &DbManager, master_key: &MasterKey) {
+    if let Some(project) = get_project_from_current_dir(db_manager, master_key) {
+        match db_manager.list_environments(master_key, &project.id) {
             Ok(environments) => {
                 if environments.is_empty() {
                     println!("No environments found for project '{}'.", project.name);
                 } else {
                     let active_env = db_manager
-                        .get_active_environment(&project.id)
+                        .get_active_environment(master_key, &project.id)
                         .unwrap_or_else(|_| "dev".to_string());
 
                     let mut table = Table::new();

@@ -1,26 +1,9 @@
 use crate::shared::db_manager::DbManager;
-use crate::shared::is_macos;
 
 pub fn unlock(db_manager: &DbManager) {
-    if !is_macos() {
-        eprintln!("Unlocking is currently only supported on macOS.");
+    if !db_manager.db_path_exists() {
+        eprintln!("Dopper database not found. Please run `dopper init` to initialize.");
         return;
     }
-
-    match db_manager.is_locked() {
-        Ok(false) => {
-            println!("Database is already unlocked.");
-            return;
-        }
-        Err(e) => {
-            eprintln!("Error checking lock status: {}", e);
-            return;
-        }
-        Ok(true) => {}
-    }
-
-    match db_manager.unlock() {
-        Ok(_) => println!("Database unlocked (decrypted) successfully."),
-        Err(e) => eprintln!("Error unlocking database: {}", e),
-    }
+    eprintln!("Unlocking to plaintext is not supported with the master password model.");
 }

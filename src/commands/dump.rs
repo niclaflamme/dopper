@@ -1,10 +1,11 @@
 use std::fs;
 use std::path::PathBuf;
 
+use crate::security::MasterKey;
 use crate::shared::{db_manager::DbManager, get_dump_path, load_config};
 
-pub fn dump(db_manager: &DbManager, file: Option<String>, stdout: bool) {
-    match db_manager.dump() {
+pub fn dump(db_manager: &DbManager, master_key: &MasterKey, file: Option<String>, stdout: bool) {
+    match db_manager.dump(master_key) {
         Ok(dump) => {
             let json = serde_json::to_string_pretty(&dump).expect("Failed to serialize dump");
 

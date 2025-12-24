@@ -1,14 +1,16 @@
 use anyhow::{Result, anyhow};
 
+use crate::security::MasterKey;
 use crate::shared::db_manager::{DbManager, Project};
 
 pub fn get_effective_env(
     db_manager: &DbManager,
+    master_key: &MasterKey,
     project: &Project,
     env_slug: &str,
 ) -> Result<Vec<(String, String)>> {
     let environment = db_manager
-        .get_environment(&project.id, env_slug)
+        .get_environment(master_key, &project.id, env_slug)
         .map_err(|_| {
             anyhow!(
                 "Environment '{}' not found for project '{}'.",
@@ -18,7 +20,7 @@ pub fn get_effective_env(
         })?;
 
     let secrets = db_manager
-        .get_secrets(&environment.id)
+        .get_secrets(master_key, &environment.id)
         .map_err(|e| anyhow!("Error retrieving secrets: {}", e))?;
 
     let mut env_vars: Vec<(String, String)> =

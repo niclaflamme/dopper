@@ -1,10 +1,11 @@
 use std::env;
 use std::io::{self, Write};
 
+use crate::security::MasterKey;
 use crate::shared::db_manager::DbManager;
 
-pub fn link(db_manager: &DbManager, project_name: Option<String>) {
-    let projects = match db_manager.list_projects() {
+pub fn link(db_manager: &DbManager, master_key: &MasterKey, project_name: Option<String>) {
+    let projects = match db_manager.list_projects(master_key) {
         Ok(p) => p,
         Err(e) => {
             eprintln!("Error listing projects: {}", e);
@@ -49,7 +50,7 @@ pub fn link(db_manager: &DbManager, project_name: Option<String>) {
     };
 
     let current_dir = env::current_dir().expect("Could not get current directory");
-    match db_manager.link_directory(&project.id, &current_dir) {
+    match db_manager.link_directory(master_key, &project.id, &current_dir) {
         Ok(_) => println!(
             "Successfully linked directory {:?} to project '{}'.",
             current_dir, project.name

@@ -25,4 +25,3 @@ pub use clipboard::set_clipboard;
 pub mod verify_integrity;
 
 pub mod db_manager;
-pub mod keychain;

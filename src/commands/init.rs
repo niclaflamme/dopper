@@ -1,9 +1,11 @@
 use std::io::{self, Write};
+use std::path::Path;
 
+use crate::security::{derive_key, generate_salt};
 use crate::shared::db_manager::DbManager;
 use crate::shared::is_macos;
 
-pub fn init(db_manager: &DbManager) {
+pub fn init(db_manager: &DbManager, salt_path: &Path) {
     if db_manager.db_path_exists() {
         println!(
             "Dopper database already exists at {:?}.",
@@ -15,33 +17,23 @@ pub fn init(db_manager: &DbManager) {
         return;
     }
 
+    let master_password = prompt_master_password("Create a Master Password: ");
+    let salt = generate_salt();
+    std::fs::write(salt_path, &salt).expect("Failed to write salt file");
+    let master_key = derive_key(&master_password, &salt).expect("Failed to derive master key");
+
     db_manager
-        .initialize_db()
+        .initialize_db(&master_key)
         .expect("Database initialization failed");
     log::debug!("Dopper initialized successfully.");
 
     if is_macos() {
-        println!("\nWould you like to encrypt your database? (Recommended)");
-        println!(
-            "This will secure your secrets using your system keychain. You may be prompted for your system password when accessing Dopper."
-        );
-        print!("Enable encryption? (y/N): ");
-        io::stdout().flush().expect("Failed to flush stdout");
-
-        let mut input = String::new();
-        io::stdin()
-            .read_line(&mut input)
-            .expect("Failed to read input");
-
-        if input.trim().eq_ignore_ascii_case("y") || input.trim().eq_ignore_ascii_case("yes") {
-            match db_manager.lock() {
-                Ok(_) => println!("Database locked (encrypted) successfully."),
-                Err(e) => eprintln!("Error locking database: {}", e),
-            }
-        } else {
-            println!(
-                "Database left unencrypted (Plaintext). You can encrypt it later using `dopper lock`."
-            );
-        }
+        println!("Master password set. Your database is encrypted.");
     }
+}
+
+fn prompt_master_password(prompt: &str) -> String {
+    eprint!("{}", prompt);
+    io::stderr().flush().expect("Failed to flush stderr");
+    rpassword::read_password().expect("Failed to read password")
 }
