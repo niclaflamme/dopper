@@ -117,8 +117,9 @@ Every project starts with `dev` and `prod`. You can add more as needed.
 
 Manage key-value pairs for the active environment.
 
-- **Set Secret:** `dopper set <KEY> [VALUE]` (Prompts securely for `VALUE` if omitted)
-- **Set for Specific Env:** `dopper set <KEY> [VALUE] --env prod`
+- **Set Secret (Standard):** `dopper secrets set <KEY> <VALUE>`
+- **Set Secret (Secure):** `dopper secrets set <KEY>` (Prompts for value; keeps secrets out of shell history)
+- **Set for Specific Env:** `dopper secrets set <KEY> [VALUE] --env prod`
 - **List Secrets:** `dopper secrets list`
 - **Unset Secret:** `dopper secrets unset <KEY>`
 
@@ -126,7 +127,6 @@ Manage key-value pairs for the active environment.
 
 - **Link Directory:** `dopper link <project_name>`
 - **Run Command:** `dopper run -- <command>`
-- **Direct Set:** `dopper set <KEY> [VALUE]`
 - **Print Secrets (.env format):** `dopper print [--env <slug>]` _(Prompts for confirmation; use `--yes` to skip)_
 - **Copy Secrets to Clipboard:** `dopper clip [--env <slug>]` _(No confirmation)_
 - **Lock/Unlock DB:** `dopper lock` / `dopper unlock` _(Manually encrypt/decrypt the database file)_
